@@ -50,27 +50,49 @@
                   <stop offset=".6" stop-color="#67745f"/>
                   <stop offset="1" stop-color="#505d4b"/>
                 </linearGradient>
-                <linearGradient id="petalSheen" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0" stop-color="#fff6ea" stop-opacity=".30"/>
-                  <stop offset=".42" stop-color="#fff6ea" stop-opacity=".05"/>
-                  <stop offset="1" stop-color="#360c18" stop-opacity=".12"/>
+                <linearGradient id="petalSheen" x1=".18" y1="0" x2=".82" y2="1">
+                  <stop offset="0" stop-color="#fff6ea" stop-opacity=".17"/>
+                  <stop offset=".32" stop-color="#fff6ea" stop-opacity=".05"/>
+                  <stop offset=".66" stop-color="#3a0d1a" stop-opacity=".04"/>
+                  <stop offset="1" stop-color="#3a0d1a" stop-opacity=".15"/>
                 </linearGradient>
                 <linearGradient id="petalSide" x1="0" y1="0" x2="1" y2="0">
-                  <stop offset="0" stop-color="#260611" stop-opacity=".40"/>
-                  <stop offset=".24" stop-color="#260611" stop-opacity=".07"/>
-                  <stop offset=".62" stop-color="#fff3e2" stop-opacity=".01"/>
-                  <stop offset=".93" stop-color="#fff3e2" stop-opacity=".16"/>
-                  <stop offset="1" stop-color="#fff3e2" stop-opacity=".04"/>
+                  <stop offset="0" stop-color="#2a0813" stop-opacity=".2"/>
+                  <stop offset=".2" stop-color="#2a0813" stop-opacity=".05"/>
+                  <stop offset=".44" stop-color="#fff4e6" stop-opacity=".055"/>
+                  <stop offset=".7" stop-color="#fff4e6" stop-opacity=".02"/>
+                  <stop offset=".88" stop-color="#2a0813" stop-opacity=".05"/>
+                  <stop offset="1" stop-color="#2a0813" stop-opacity=".17"/>
                 </linearGradient>
-                <radialGradient id="petalBase" cx=".5" cy="1" r=".72">
-                  <stop offset="0" stop-color="#2c0814" stop-opacity=".5"/>
-                  <stop offset=".62" stop-color="#2c0814" stop-opacity=".11"/>
-                  <stop offset="1" stop-color="#2c0814" stop-opacity="0"/>
+                <radialGradient id="petalBase" cx=".5" cy="1" r=".82">
+                  <stop offset="0" stop-color="#24060f" stop-opacity=".34"/>
+                  <stop offset=".5" stop-color="#24060f" stop-opacity=".09"/>
+                  <stop offset="1" stop-color="#24060f" stop-opacity="0"/>
+                </radialGradient>
+                <linearGradient id="petalRim" x1="0" y1="1" x2="0" y2="0">
+                  <stop offset="0" stop-color="#ffe1d8" stop-opacity="0"/>
+                  <stop offset=".52" stop-color="#ffe1d8" stop-opacity=".03"/>
+                  <stop offset="1" stop-color="#fff0e6" stop-opacity=".13"/>
+                </linearGradient>
+                <radialGradient id="flowerCore" cx=".5" cy=".5" r=".5">
+                  <stop offset="0" stop-color="#2a0812" stop-opacity=".4"/>
+                  <stop offset=".58" stop-color="#2a0812" stop-opacity=".13"/>
+                  <stop offset="1" stop-color="#2a0812" stop-opacity="0"/>
+                </radialGradient>
+                <radialGradient id="flowerShade" cx=".5" cy=".5" r=".5">
+                  <stop offset="0" stop-color="#2a0812" stop-opacity="0"/>
+                  <stop offset=".62" stop-color="#2a0812" stop-opacity=".06"/>
+                  <stop offset="1" stop-color="#2a0812" stop-opacity=".28"/>
+                </radialGradient>
+                <radialGradient id="flowerLight" cx=".5" cy=".5" r=".5">
+                  <stop offset="0" stop-color="#fff6ea" stop-opacity=".46"/>
+                  <stop offset=".46" stop-color="#ffe9cf" stop-opacity=".15"/>
+                  <stop offset="1" stop-color="#ffe9cf" stop-opacity="0"/>
                 </radialGradient>
                 <radialGradient id="heartGrad" cx=".5" cy=".5" r=".5">
-                  <stop offset="0" stop-color="#2f0a15"/>
-                  <stop offset=".7" stop-color="#4c1422"/>
-                  <stop offset="1" stop-color="#5d1c2b"/>
+                  <stop offset="0" stop-color="#3a1120"/>
+                  <stop offset=".7" stop-color="#4f1726"/>
+                  <stop offset="1" stop-color="#5f1e2d"/>
                 </radialGradient>
                 <radialGradient id="groundGlow" cx=".5" cy=".5" r=".5">
                   <stop offset="0" stop-color="#5d2431" stop-opacity=".18"/>
@@ -123,6 +145,11 @@
                 <circle class="rose__heart" cx="0" cy="0" r="38" fill="url(#heartGrad)"/>
                 <circle class="rose__hit" data-rose-hit cx="0" cy="0" r="402" fill="transparent" pointer-events="all"/>
                 <g id="petals" class="petals"></g>
+                <g class="rose__lighting" aria-hidden="true" pointer-events="none">
+                  <ellipse class="rose__core" cx="0" cy="-10" rx="148" ry="146" fill="url(#flowerCore)"/>
+                  <ellipse class="rose__shade" cx="26" cy="34" rx="402" ry="394" fill="url(#flowerShade)"/>
+                  <ellipse class="rose__light" cx="-44" cy="-74" rx="376" ry="356" fill="url(#flowerLight)"/>
+                </g>
                 <g class="rose__knot" aria-hidden="true">
                   <path d="M1 2C-9-4-8-17 3-18c12-1 16 12 8 19-6 5-15 2-15-5" fill="none" stroke="#2f0a15" stroke-width="2.3" stroke-linecap="round" opacity=".45"/>
                   <path d="M0 0C-4-4-2-9 3-9 8-9 9-3 5 0" fill="none" stroke="#efc9c4" stroke-width=".7" stroke-linecap="round" opacity=".14"/>
@@ -259,15 +286,33 @@
         </section>
       </div>
 
-      <footer class="secret__music" lang="fr">
-        <div class="music__meta">
+      <footer class="secret__music" id="musicSection" lang="fr">
+        <div class="music__head">
           <p class="kicker">Bande sonore</p>
-          <button class="music__toggle" id="musicToggle" type="button" hidden>Pause</button>
-          <p class="music__note">Si le silence persiste, lancez la lecture dans le lecteur.</p>
-          <a class="music__link" href="https://www.youtube.com/watch?v=cvamJ4oKBGY"
-             target="_blank" rel="noopener noreferrer">Ouvrir sur YouTube</a>
+          <p class="music__status" id="musicStatus" role="status" aria-live="polite">
+            Appuyez sur « Écouter » pour lancer la musique.
+          </p>
         </div>
-        <div class="music__player" id="playerMount"></div>
+        <div class="music__controls">
+          <button class="music__toggle" id="musicToggle" type="button"
+                  aria-pressed="false" aria-label="Lancer la bande sonore">
+            <span class="music__glyph" aria-hidden="true">
+              <svg class="music__icon music__icon--play" viewBox="0 0 24 24"><path d="M8 5.6v12.8L18.6 12z"/></svg>
+              <svg class="music__icon music__icon--pause" viewBox="0 0 24 24"><path d="M8 5.6h3v12.8H8zM13 5.6h3v12.8h-3z"/></svg>
+            </span>
+            <span class="music__label" id="musicLabel">Écouter</span>
+          </button>
+          <span class="music__wave" id="musicWave" aria-hidden="true">
+            <i></i><i></i><i></i><i></i><i></i>
+          </span>
+        </div>
+        <div class="music__progress" id="musicProgress" hidden>
+          <span class="music__track"><span class="music__track-fill" id="musicFill"></span></span>
+          <span class="music__time" id="musicTime">0:00 / 0:00</span>
+        </div>
+        <a class="music__link" href="https://www.youtube.com/watch?v=cvamJ4oKBGY"
+           target="_blank" rel="noopener noreferrer">Ouvrir sur YouTube</a>
+        <div class="music__player" id="playerMount" aria-hidden="true"></div>
       </footer>
       </div>
     </div>

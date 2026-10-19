@@ -58,11 +58,15 @@ full licence text in `assets/fonts/` governs in all cases.
 ## YouTube
 
 The page embeds and links to
-<https://www.youtube.com/watch?v=cvamJ4oKBGY> using the official YouTube
-embedded player. The video, its audio, thumbnail, and any associated artwork
-remain the property of their respective rights holders. No YouTube content is
-downloaded, extracted, re-hosted, or proxied by this repository. Playback is
-subject to YouTube's terms and to the video owner's embedding permissions.
+<https://www.youtube.com/watch?v=cvamJ4oKBGY> using the official **YouTube
+IFrame Player API** (<https://www.youtube.com/iframe_api>). The video, its
+audio, thumbnail, and any associated artwork remain the property of their
+respective rights holders. No YouTube content is downloaded, extracted,
+re-hosted, or proxied by this repository, and no unofficial method is used to
+obtain the audio stream. The API is used only to control the official player
+(`setVolume`, `playVideo`, `pauseVideo`, `getCurrentTime`, `getDuration`).
+Playback is subject to YouTube's terms and to the video owner's embedding
+permissions; the **Ouvrir sur YouTube** link is the always-available fallback.
 
 ## GitHub Pages
 

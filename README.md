@@ -5,7 +5,9 @@ mathematically drawn rose opens one petal per click. After the hundred-and-first
 petal, the rose settles and reveals a Vietnamese letter. A discreet inscription
 inside that letter opens a sealed French puzzle: two Vietnamese questions, a
 six-word sequence, and a final literary sentence. The whole experience is a
-static site with no build step, backend, API key, or third-party JavaScript.
+static site with no build step, backend, or API key; the only third-party
+script is the official YouTube IFrame Player API, loaded on demand for the
+soundtrack.
 
 ## What is in the box
 
@@ -31,10 +33,16 @@ the puzzle answers; it is not part of the published artifact.
 
 The rose is generated at runtime in `script.js`. It is not a raster image and
 there are no pre-drawn petals. One hundred and one distinct `<g class="petal">`
-elements are created on a golden-angle spiral. Each petal has its own Bézier
-blade, shading layers, vein, crease, closed/open transform, duration, and
-opening state. A separate decorative knot at the centre is not counted as a
-petal.
+elements are created on a golden-angle spiral. Each petal is a single smooth,
+closed ovoid path built from a parametric outline and fitted with Catmull-Rom
+Bézier segments, so it has a narrow base and a broad rounded apex and no
+angular corner anywhere. Every petal carries its own randomised outline, rim
+ruffle, lean, palette tint, opacity shading, vein and crease, plus its own
+closed/open transform, duration and opening state. A reusable `<defs>` outline
+is referenced by `<use>` shading layers, which keeps the DOM light. Soft
+contact shadows, a rounded apex and a set of directional-light overlays (whose
+scale and opacity follow the bloom) give the flower a hand-drawn botanical
+feel. A separate decorative knot at the centre is not counted as a petal.
 
 ## Run locally
 
@@ -66,9 +74,12 @@ relative so the same files also work from a repository subpath.
 2. **Greeting.** The letter is built only when the 101st petal finishes. It
    contains the Vietnamese greeting and the button
    `Un secret pour mon petit détective`.
-3. **Sealed letter.** Opening the secret creates one YouTube iframe, attempts
-   playback, and shows the two Vietnamese questions. Reopening reuses that same
-   player.
+3. **Sealed letter.** Opening the secret loads the official YouTube IFrame
+   Player API (once, on first interaction with the rose), starts the soundtrack
+   at 35 % volume and shows the two Vietnamese questions. The player node is
+   never shown; the soundtrack is presented with a compact play/pause control,
+   a live sound-wave indicator, a real playback status line, an honest progress
+   line and the **Ouvrir sur YouTube** link. Reopening reuses the same player.
 4. **Verification.** Both answers are normalised and checked as SHA-256 digests
    with the Web Crypto API. A partially correct submission preserves the
    correct field; both must pass to continue.
@@ -132,9 +143,10 @@ After the first successful publish:
    files, and `assets/favicon.svg` all return `200` (not `404`).
 5. Open DevTools → **Console** and confirm there are no errors.
 6. Complete the rose (or emulate reduced motion to move quickly), open the
-   secret, and confirm one YouTube iframe exists after closing and reopening.
+   secret, and confirm the soundtrack control reports the real player state with
+   volume `35`, and that only one player exists after closing and reopening.
 7. Check the layout at a wide desktop size and at 390 × 844 in device
-   emulation, including the dialog.
+   emulation, including the dialog and the soundtrack controls.
 
 ## Troubleshooting
 
@@ -159,26 +171,49 @@ After the first successful publish:
   surrounding paper. If motion is reduced, petals change state immediately and
   the next tap is accepted as soon as the state updates.
 
-## YouTube playback
+## Soundtrack (audio-focused)
 
-The site embeds the official player for
-<https://www.youtube.com/watch?v=cvamJ4oKBGY>. The iframe is created only after
-the visitor activates the secret inscription, which keeps the initial page
-light and gives playback the best chance of being treated as user-initiated.
+The soundtrack is the official player for
+<https://www.youtube.com/watch?v=cvamJ4oKBGY>, driven through the **YouTube
+IFrame Player API**. The player is created only after the visitor first
+interacts with the rose, so it is ready (and can be started synchronously from
+the click on `Un secret pour mon petit détective`) by the time the letter opens.
 There is never more than one player.
 
+The interface is deliberately audio-focused: no video frame, no thumbnail and
+no black rectangle are shown. The player node is moved out of view and the
+reader only sees a minimal play/pause control, an animated sound-wave that runs
+**only while the player reports playback**, a truthful status line
+(`Lecture en cours.`, `En pause.`, `Lecture terminée.`,
+`Chargement de la musique…`, `La lecture est bloquée…`) and a progress line fed
+by `getCurrentTime()` / `getDuration()`.
+
+**Volume.** The default loudness is **35 / 100**. `setVolume(35)` is called in
+the player's `onReady` handler and again immediately before every start, so the
+first audible frame is already at 35 %. Player methods are never called before
+the API and the player are ready. No volume slider is provided, so 35 % is
+preserved across pause and resume. Perceived loudness still depends on the
+operating-system and browser audio settings.
+
+**Compliance note.** YouTube's Terms of Service expect the embedded player to
+remain visible, and YouTube does not provide a supported audio-only mode for a
+`watch` URL. Moving the player out of view is therefore a presentation choice,
+not an officially sanctioned one. The reliable, compliant fallback is the
+**Ouvrir sur YouTube** link, which is always present and always opens the
+original watch page.
+
 Autoplay is not guaranteed. Browser autoplay policies, YouTube embedding
-permissions, age or region restrictions, tracker blockers, offline networks,
-and the video owner's settings can all prevent or stop playback. When sound
-does not start:
+permissions, age or region restrictions, tracker blockers, offline networks and
+the video owner's settings can all prevent or stop playback. When sound does not
+start, the status line says so honestly, the control offers **Réessayer**, and:
 
-- use the **Pause / Reprendre** control, which sends `pauseVideo` and
-  `playVideo` commands to the existing iframe;
-- press play directly inside the YouTube player;
-- use **Ouvrir sur YouTube** to watch the original video in a new tab.
+- the **Pause / Reprendre** control calls the real player (`pauseVideo` /
+  `playVideo`) and reflects the real player state;
+- **Ouvrir sur YouTube** opens the original video in a new tab.
 
-No audio is downloaded, extracted, proxied, or re-hosted. Music is optional and
-does not gate any part of the experience.
+No audio is downloaded, extracted, proxied, or re-hosted, and no unofficial
+method is used to obtain the stream. Music is optional and never gates the rose,
+the questions or the final sequence.
 
 ## Client-side verification limits
 

@@ -15,14 +15,14 @@
   // The rose is grown as a phyllotactic spiral; rings only tint the petals
   // and define how far the opening sequence has travelled outwards.
   const RINGS = [
-    { count: 3,  palette: ["#481522", "#551b29", "#5d2130"] },
-    { count: 6,  palette: ["#511a28", "#5c1f30", "#652636"] },
-    { count: 9,  palette: ["#5a1e2e", "#652435", "#6e2a3b"] },
-    { count: 12, palette: ["#632333", "#6e2a3b", "#783143"] },
-    { count: 15, palette: ["#6c2939", "#783141", "#82394a"] },
-    { count: 18, palette: ["#753041", "#823a4b", "#8d4354"] },
-    { count: 19, palette: ["#7e394a", "#8b4556", "#985262"] },
-    { count: 19, palette: ["#8a4454", "#985361", "#a5616f"] }
+    { count: 3,  palette: ["#43121f", "#4d1625", "#571a2a"] },
+    { count: 6,  palette: ["#4d1524", "#581a2a", "#622031"] },
+    { count: 9,  palette: ["#571a2a", "#632132", "#6d2738"] },
+    { count: 12, palette: ["#622132", "#6d2939", "#782f40"] },
+    { count: 15, palette: ["#6c2838", "#783040", "#833949"] },
+    { count: 18, palette: ["#772f3f", "#833a4a", "#8e4555"] },
+    { count: 19, palette: ["#83394a", "#8f4757", "#9b5464"] },
+    { count: 19, palette: ["#8f4756", "#9c5665", "#a96574"] }
   ];
 
   function mulberry32(seed) {
@@ -35,40 +35,91 @@
     };
   }
 
-  function petalPath(len, half, rand, ring) {
-    const lean = (rand() - 0.5) * half * 0.2;
-    const asym = (rand() - 0.5) * half * 0.08;
-    const shoulderY = -len * (0.775 + rand() * 0.03);
-    const leftShoulder = -half * (0.75 + rand() * 0.04) + lean * 0.25 + asym;
-    const rightShoulder = half * (0.75 + rand() * 0.04) + lean * 0.25 + asym;
-    const leftLobe = -half * (0.3 + rand() * 0.06) + lean * 0.72 + asym * 0.6;
-    const rightLobe = half * (0.3 + rand() * 0.06) + lean * 0.72 + asym * 0.6;
-    const tipLeft = -len * (0.992 + rand() * 0.008);
-    const tipRight = -len * (0.968 + rand() * 0.022);
-    const notch = -len * (ring > 2 ? 0.928 : 0.952) + (rand() - 0.5) * len * 0.012;
-    return [
-      "M 0 0",
-      `C ${-half * 0.46} ${-len * 0.075} ${-half * 0.97} ${-len * 0.29} ${-half * 1.015} ${-len * 0.5}`,
-      `C ${-half * 1.02} ${-len * 0.64} ${-half * 0.92} ${-len * 0.73} ${leftShoulder.toFixed(2)} ${shoulderY.toFixed(2)}`,
-      `C ${(leftShoulder * 0.82).toFixed(2)} ${(-len * 0.89).toFixed(2)} ${(leftLobe * 0.96).toFixed(2)} ${tipLeft.toFixed(2)} ${leftLobe.toFixed(2)} ${tipLeft.toFixed(2)}`,
-      `Q ${(lean * 0.45).toFixed(2)} ${notch.toFixed(2)} ${rightLobe.toFixed(2)} ${tipRight.toFixed(2)}`,
-      `C ${(rightLobe * 0.96).toFixed(2)} ${tipRight.toFixed(2)} ${(rightShoulder * 0.82).toFixed(2)} ${(-len * 0.89).toFixed(2)} ${rightShoulder.toFixed(2)} ${shoulderY.toFixed(2)}`,
-      `C ${half * 0.92} ${-len * 0.73} ${half * 1.02} ${-len * 0.64} ${half * 1.015} ${-len * 0.5}`,
-      `C ${half * 0.97} ${-len * 0.29} ${half * 0.46} ${-len * 0.075} 0 0 Z`
-    ].join(" ");
+  // Catmull-Rom through a closed loop of points, emitted as smooth cubic
+  // Bézier segments. Every join keeps a continuous tangent, so the petal
+  // outline has no angular corners anywhere.
+  function smoothClosedPath(points, tension) {
+    const k = (tension === undefined ? 0.9 : tension) / 6;
+    const n = points.length;
+    const out = [`M ${points[0][0].toFixed(2)} ${points[0][1].toFixed(2)}`];
+    for (let i = 0; i < n; i += 1) {
+      const p0 = points[(i - 1 + n) % n];
+      const p1 = points[i];
+      const p2 = points[(i + 1) % n];
+      const p3 = points[(i + 2) % n];
+      const c1x = p1[0] + (p2[0] - p0[0]) * k;
+      const c1y = p1[1] + (p2[1] - p0[1]) * k;
+      const c2x = p2[0] - (p3[0] - p1[0]) * k;
+      const c2y = p2[1] - (p3[1] - p1[1]) * k;
+      out.push(
+        `C ${c1x.toFixed(2)} ${c1y.toFixed(2)} ${c2x.toFixed(2)} ${c2y.toFixed(2)} ` +
+        `${p2[0].toFixed(2)} ${p2[1].toFixed(2)}`
+      );
+    }
+    out.push("Z");
+    return out.join(" ");
   }
 
-  function veinPath(len, half, rand) {
-    const drift = (rand() - 0.5) * half * 0.3;
-    return `M 0 ${-len * 0.05} C ${half * 0.09} ${-len * 0.31} ${-half * 0.08} ${-len * 0.6} ${drift.toFixed(2)} ${-len * 0.86}`;
+  // A single rose petal, drawn as one smooth closed ovoid: narrow at the
+  // base, swelling toward a broad rounded apex. Sampled densely and fitted
+  // with Catmull-Rom, so there is no angular corner anywhere. Inner petals
+  // are more tapered; outer petals are broader with a ruffled rim. The base
+  // pointiness, the rim ruffle and a slight lean are all randomised.
+  function petalOutline(len, half, rand, ring) {
+    const t = ring / (RINGS.length - 1);
+    const q = lerp(0.4, 0.62, t) + (rand() - 0.5) * 0.08;
+    const lean = (rand() - 0.5) * 0.16;
+    const asym = (rand() - 0.5) * 0.13;
+    const ruffle = lerp(0.02, 0.05, t) * (0.6 + rand() * 0.8);
+    const freq = 2 + Math.floor(rand() * 3);
+    const phase = rand() * Math.PI * 2;
+
+    const points = [];
+    const steps = 24;
+    for (let i = 0; i <= steps; i += 1) {
+      const theta = (Math.PI * 2 * i) / steps;
+      const s = Math.sin(theta);
+      const c = Math.cos(theta);
+      const v = (1 - c) * 0.5;                 // 0 at base, 1 at apex
+      let w = half * s * Math.pow(v, q);
+      w *= 1 + ruffle * Math.sin(freq * theta + phase) * Math.abs(s);
+      if (s > 0) w *= 1 + asym;
+      const drift = lean * half * v;
+      points.push([w + drift, -len * v]);
+    }
+    return smoothClosedPath(points, 0.92);
+  }
+
+  function veinPath(len, half, rand, ring) {
+    const t = ring / (RINGS.length - 1);
+    const bend = (rand() - 0.5) * half * 0.3;
+    const top = -len * (0.7 + rand() * 0.16);
+    const mid = -len * (0.36 + rand() * 0.1);
+    return (
+      `M 0 ${(-len * 0.05).toFixed(2)} ` +
+      `C ${(half * 0.05).toFixed(2)} ${(-len * 0.19).toFixed(2)} ` +
+      `${(bend * 0.4).toFixed(2)} ${(mid).toFixed(2)} ${(bend * 0.85).toFixed(2)} ${(top * 0.92).toFixed(2)} ` +
+      `S ${(bend * 1.05).toFixed(2)} ${(top * 0.99).toFixed(2)} ${(bend).toFixed(2)} ${(top).toFixed(2)}`
+    );
   }
 
   function creasePath(len, half, rand) {
     const side = rand() > 0.5 ? 1 : -1;
-    return `M 0 ${-len * 0.08} C ${(side * half * 0.24).toFixed(2)} ${-len * 0.34} ${(side * half * 0.32).toFixed(2)} ${-len * 0.53} ${(side * half * 0.25).toFixed(2)} ${-len * 0.7}`;
+    const spread = half * (0.15 + rand() * 0.12) * side;
+    return (
+      `M ${(spread * 0.25).toFixed(2)} ${(-len * 0.06).toFixed(2)} ` +
+      `C ${spread.toFixed(2)} ${(-len * 0.32).toFixed(2)} ` +
+      `${(spread * 0.8).toFixed(2)} ${(-len * 0.58).toFixed(2)} ` +
+      `${(spread * 0.35).toFixed(2)} ${(-len * 0.78).toFixed(2)}`
+    );
   }
 
   const petalsGroup = document.getElementById("petals");
+  // One reusable outline per petal lives in <defs>; the shading layers are
+  // <use> references, so the (long) organic path data is stored only once.
+  const petalDefs = document.createElementNS(SVG_NS, "defs");
+  petalDefs.setAttribute("id", "petalDefs");
+  petalsGroup.parentNode.insertBefore(petalDefs, petalsGroup);
   const petals = [];        // opening sequence order, centre outward
   const cumulative = [];
   RINGS.reduce((sum, conf) => {
@@ -91,24 +142,33 @@
     const ring = stageFor(index);
     const conf = RINGS[ring];
     const rand = mulberry32(101 + index * 7919);
-    const angle = index * 137.508 + 8 + (rand() - 0.5) * 2.4;
-    const baseOpen = 10 + 196 * Math.pow(t, 1.3) + (rand() - 0.5) * 10;
+    const angle = index * 137.508 + 8 + (rand() - 0.5) * (4 + t * 12);
+    const baseOpen = 22 + 184 * Math.pow(t, 1.02) + (rand() - 0.5) * (10 + t * 34);
     const baseClosed = 4 + 44 * Math.pow(t, 1.16) + (rand() - 0.5) * 3;
-    const len = (92 + 108 * Math.pow(t, 0.82)) * (0.94 + rand() * 0.12);
-    const half = (50 + 88 * Math.pow(t, 0.88)) * (0.94 + rand() * 0.12);
+    const len = (92 + 108 * Math.pow(t, 0.82)) * (0.94 + rand() * (0.12 + t * 0.1));
+    const half = (50 + 88 * Math.pow(t, 0.88)) * (0.94 + rand() * (0.12 + t * 0.08));
     const closedSX = lerp(0.7, 0.5, t) + (rand() - 0.5) * 0.03;
     const closedSY = lerp(0.72, 0.49, t) + (rand() - 0.5) * 0.03;
     const twistClosed = -(14 + t * 38) + (rand() - 0.5) * 6;
     const twistOpen = index < 13
-      ? 34 + index * 3.1 + (rand() - 0.5) * 5
+      ? 22 + index * 2.6 + (rand() - 0.5) * 5
       : index < 26
-        ? 13 + (index - 13) * 1.15 + (rand() - 0.5) * 5
+        ? 12 + (index - 13) * 1.1 + (rand() - 0.5) * 5
         : 1 + (rand() - 0.5) * 7;
     const duration = 570 + t * 250 + Math.round(rand() * 100);
-    const d = petalPath(len, half, rand, ring);
-    const v = veinPath(len, half, rand);
+    const d = petalOutline(len, half, rand, ring);
+    const v = veinPath(len, half, rand, ring);
     const c = creasePath(len, half, rand);
     const color = conf.palette[index % conf.palette.length];
+    const shapeId = `petalShape${index}`;
+    const shadowX = (1.1 + rand() * 1.9).toFixed(2);
+    const shadowY = (1.6 + rand() * 2.6).toFixed(2);
+    const shadowOpacity = (0.06 + rand() * 0.07).toFixed(3);
+
+    const shape = document.createElementNS(SVG_NS, "path");
+    shape.setAttribute("id", shapeId);
+    shape.setAttribute("d", d);
+    petalDefs.appendChild(shape);
 
     const el = document.createElementNS(SVG_NS, "g");
     el.setAttribute("class", "petal");
@@ -118,12 +178,14 @@
     el.innerHTML = `
       <g class="petal__slide" transform="translate(0 ${(-baseClosed).toFixed(2)})">
         <g class="petal__fold" transform="scale(${closedSX.toFixed(3)} ${closedSY.toFixed(3)}) rotate(${twistClosed.toFixed(2)})">
-          <path class="petal__blade" d="${d}" fill="${color}" stroke="rgba(42,11,20,.32)" stroke-width="${ring > 4 ? 1.6 : 1.3}" stroke-linejoin="round"/>
-          <path class="petal__side" d="${d}" fill="url(#petalSide)"/>
-          <path class="petal__sheen" d="${d}" fill="url(#petalSheen)"/>
-          <path class="petal__base" d="${d}" fill="url(#petalBase)"/>
-          <path class="petal__vein" d="${v}" fill="none" stroke="${ring > 4 ? "rgba(45,10,20,.28)" : "rgba(255,240,228,.16)"}" stroke-width="1.15" stroke-linecap="round"/>
-          <path class="petal__crease" d="${c}" fill="none" stroke="rgba(48,12,22,.14)" stroke-width="1.4" stroke-linecap="round"/>
+          <use class="petal__shadow" href="#${shapeId}" transform="translate(${shadowX} ${shadowY})" fill="#250610" opacity="${shadowOpacity}"/>
+          <use class="petal__blade" href="#${shapeId}" fill="${color}"/>
+          <use class="petal__side" href="#${shapeId}" fill="url(#petalSide)"/>
+          <use class="petal__sheen" href="#${shapeId}" fill="url(#petalSheen)"/>
+          <use class="petal__base" href="#${shapeId}" fill="url(#petalBase)"/>
+          <use class="petal__rim" href="#${shapeId}" fill="none" stroke="url(#petalRim)" stroke-width="${ring > 4 ? 1.05 : 0.75}" stroke-linejoin="round"/>
+          <path class="petal__vein" d="${v}" fill="none" stroke="${ring > 4 ? "rgba(50,12,24,.16)" : "rgba(255,240,228,.12)"}" stroke-width="1" stroke-linecap="round"/>
+          <path class="petal__crease" d="${c}" fill="none" stroke="rgba(48,12,22,.055)" stroke-width="1.1" stroke-linecap="round"/>
         </g>
       </g>`;
     const orientation = document.createElementNS(SVG_NS, "g");
@@ -142,6 +204,7 @@
       closedSY,
       twistClosed,
       twistOpen,
+      opened: false,
       duration
     });
   }
@@ -181,6 +244,7 @@
   /* --- Progress ---------------------------------------------------------- */
   const countEl = document.getElementById("count");
   const rulerEl = document.getElementById("ruler");
+  const lightingEl = document.querySelector(".rose__lighting");
   const ticks = [];
 
   for (let i = 0; i < TOTAL_PETALS; i += 1) {
@@ -191,11 +255,20 @@
     ticks.push(tick);
   }
 
+  // The directional-light overlays only make sense around an opened bloom, so
+  // they grow and fade in with the flower instead of hovering over the bud.
+  function updateAmbient(bloom) {
+    if (!lightingEl) return;
+    lightingEl.style.opacity = (bloom * bloom).toFixed(3);
+    lightingEl.setAttribute("transform", `scale(${(0.34 + 0.66 * bloom).toFixed(3)})`);
+  }
+
   function setProgress(opened) {
     countEl.textContent = String(opened).padStart(2, "0");
     rulerEl.setAttribute("aria-valuenow", String(opened));
     rulerEl.setAttribute("aria-valuetext", `${opened} pétales sur ${TOTAL_PETALS}`);
     ticks.forEach((tick, index) => tick.classList.toggle("is-open", index < opened));
+    updateAmbient(opened / TOTAL_PETALS);
   }
 
   /* --- State ------------------------------------------------------------- */
@@ -211,8 +284,6 @@
     sequenceStep: 0,
     sequenceLocked: false,
     completed: false,
-    player: null,
-    musicPlaying: false,
     closing: false,
     parallaxFrame: 0
   };
@@ -232,11 +303,28 @@
       if (!(target instanceof Element) || !target.closest("[data-petal], [data-rose-hit]")) return;
     }
 
+    // A pointer click on a specific closed petal opens that petal. Any other
+    // accepted click (the hit area, or an already-opened petal) opens the next
+    // unopened petal, centre outward — so the flower still unfolds in order.
+    let record = null;
+    if (event && event.detail !== 0 && event.target instanceof Element) {
+      const petalEl = event.target.closest("[data-petal]");
+      if (petalEl) {
+        const hit = petals.find((candidate) => candidate.el === petalEl);
+        if (hit && !hit.opened) record = hit;
+      }
+    }
+    if (!record) {
+      record = petals.find((candidate) => !candidate.opened) || null;
+    }
+    if (!record) return;
+
     state.phase = "blooming";
     state.animating = true;
+    loadMusicApi();               // warm up the player during early engagement
     plate.classList.add("has-begun");
     roseBtn.setAttribute("aria-busy", "true");
-    const record = petals[state.opened];
+    record.opened = true;
     record.el.classList.add("is-open");
 
     animatePetal(record).then(() => {
@@ -421,7 +509,7 @@
     if (!OPEN_PHASES.has(state.phase) || dialog.open) return;
     if (!state.secretOpened) {
       state.secretOpened = true;
-      createPlayer();
+      startPlayback();
     }
     if (state.phase === "greetingUnlocked") state.phase = "secretOpen";
 
@@ -475,42 +563,231 @@
   });
 
   /* --- Music ------------------------------------------------------------- */
+  // The soundtrack is presented with its own compact control, not a video
+  // frame. Playback runs through the official YouTube IFrame Player API; the
+  // player node itself is kept out of the way (see .music__player).
   const VIDEO_ID = "cvamJ4oKBGY";
+  const DEFAULT_VOLUME = 35;
+  const YT_ENDED = 0;
+  const YT_PLAYING = 1;
+  const YT_PAUSED = 2;
+  const YT_BUFFERING = 3;
+  const YT_CUED = 5;
 
-  function createPlayer() {
-    if (state.player) return;
-    const iframe = document.createElement("iframe");
-    const origin = /^https?:$/.test(window.location.protocol)
-      ? `&origin=${encodeURIComponent(window.location.origin)}`
-      : "";
-    iframe.src = `https://www.youtube.com/embed/${VIDEO_ID}?autoplay=1&playsinline=1&rel=0&modestbranding=1&enablejsapi=1${origin}`;
-    iframe.title = "Bande sonore — YouTube";
-    iframe.allow = "autoplay; encrypted-media; picture-in-picture; web-share";
-    iframe.referrerPolicy = "strict-origin-when-cross-origin";
-    iframe.setAttribute("frameborder", "0");
-    iframe.loading = "eager";
-    playerMount.appendChild(iframe);
+  const musicSection = document.getElementById("musicSection");
+  const musicStatus = document.getElementById("musicStatus");
+  const musicLabel = document.getElementById("musicLabel");
+  const musicProgress = document.getElementById("musicProgress");
+  const musicFill = document.getElementById("musicFill");
+  const musicTime = document.getElementById("musicTime");
 
-    state.player = iframe;
-    state.musicPlaying = true;
-    musicToggle.hidden = false;
-    musicToggle.textContent = "Pause";
-    musicToggle.setAttribute("aria-label", "Mettre la musique en pause");
+  const music = {
+    player: null,
+    apiLoading: false,
+    apiReady: false,
+    ready: false,
+    wanted: false,
+    started: false,
+    playing: false,
+    failed: false,
+    poll: 0
+  };
+
+  function formatTime(seconds) {
+    if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
+    const total = Math.floor(seconds);
+    return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+  }
+
+  function setMusicStatus(text) {
+    if (musicStatus) musicStatus.textContent = text;
+  }
+
+  function reflectMusic() {
+    const playing = music.playing;
+    musicToggle.setAttribute("aria-pressed", playing ? "true" : "false");
+    musicToggle.setAttribute(
+      "aria-label",
+      playing ? "Mettre la musique en pause"
+        : music.failed ? "Réessayer la lecture"
+          : music.started ? "Reprendre la musique"
+            : "Lancer la bande sonore"
+    );
+    if (musicLabel) {
+      musicLabel.textContent = playing ? "Pause"
+        : music.failed ? "Réessayer"
+          : music.started ? "Reprendre" : "Écouter";
+    }
+    if (musicSection) musicSection.classList.toggle("is-playing", playing);
+  }
+
+  // The IFrame API is loaded the first time the reader interacts with the
+  // rose, so the player is ready (and can be started synchronously from a
+  // genuine click) long before the sealed letter is opened.
+  function loadMusicApi() {
+    if (music.apiLoading || music.apiReady) return;
+    music.apiLoading = true;
+    window.onYouTubeIframeAPIReady = () => {
+      music.apiReady = true;
+      buildPlayer();
+    };
+    const tag = document.createElement("script");
+    tag.id = "youtubeIframeApi";
+    tag.async = true;
+    tag.src = "https://www.youtube.com/iframe_api";
+    tag.addEventListener("error", () => {
+      music.failed = true;
+      reflectMusic();
+      setMusicStatus("La musique n'a pas pu être chargée. Ouvrez la vidéo sur YouTube.");
+    });
+    document.head.appendChild(tag);
+  }
+
+  function buildPlayer() {
+    if (music.player || !music.apiReady || !window.YT || !window.YT.Player) return;
+    music.player = new window.YT.Player(playerMount, {
+      videoId: VIDEO_ID,
+      playerVars: {
+        autoplay: 0,
+        controls: 0,
+        disablekb: 1,
+        fs: 0,
+        iv_load_policy: 3,
+        modestbranding: 1,
+        playsinline: 1,
+        rel: 0,
+        origin: window.location.origin
+      },
+      events: {
+        onReady: onPlayerReady,
+        onStateChange: onPlayerStateChange,
+        onError: onPlayerError
+      }
+    });
+  }
+
+  // The requested default loudness. Applied on ready and again immediately
+  // before each start, so the very first sound is already at 35/100.
+  function applyVolume() {
+    if (!music.player || typeof music.player.setVolume !== "function") return;
+    try {
+      music.player.setVolume(DEFAULT_VOLUME);
+    } catch (error) {
+      music.failed = true;
+      setMusicStatus("Le volume n'a pas pu être réglé par le navigateur.");
+    }
+  }
+
+  function onPlayerReady() {
+    music.ready = true;
+    applyVolume();
+    if (music.wanted) startPlayback();
+  }
+
+  function startPlayback() {
+    music.wanted = true;
+    if (!music.apiReady) {
+      loadMusicApi();
+      setMusicStatus("Chargement de la musique…");
+      return;
+    }
+    if (!music.ready || !music.player) {
+      setMusicStatus("Chargement de la musique…");
+      return;
+    }
+    applyVolume();                       // before the first audible frame
+    try {
+      if (typeof music.player.unMute === "function") music.player.unMute();
+      music.player.playVideo();
+    } catch (error) {
+      onPlayerError();
+      return;
+    }
+    music.started = true;
+    music.failed = false;
+    setMusicStatus("Lecture en cours…");
+    reflectMusic();
+  }
+
+  function onPlayerStateChange(event) {
+    const status = event && typeof event.data === "number" ? event.data : YT_CUED;
+    if (status === YT_PLAYING) {
+      music.playing = true;
+      music.started = true;
+      music.failed = false;
+      setMusicStatus("Lecture en cours.");
+      reflectMusic();
+      startProgressPolling();
+    } else if (status === YT_PAUSED) {
+      music.playing = false;
+      setMusicStatus("En pause.");
+      reflectMusic();
+      stopProgressPolling();
+      updateProgress();
+    } else if (status === YT_ENDED) {
+      music.playing = false;
+      setMusicStatus("Lecture terminée.");
+      reflectMusic();
+      stopProgressPolling();
+      updateProgress();
+    } else if (status === YT_BUFFERING) {
+      if (music.wanted) setMusicStatus("Chargement de la musique…");
+    }
+  }
+
+  function onPlayerError() {
+    music.playing = false;
+    music.failed = true;
+    reflectMusic();
+    stopProgressPolling();
+    musicProgress.hidden = true;
+    setMusicStatus("La lecture est bloquée. Ouvrez la vidéo sur YouTube.");
+  }
+
+  function startProgressPolling() {
+    if (music.poll) return;
+    music.poll = window.setInterval(updateProgress, 500);
+    updateProgress();
+  }
+
+  function stopProgressPolling() {
+    if (music.poll) {
+      window.clearInterval(music.poll);
+      music.poll = 0;
+    }
+  }
+
+  function updateProgress() {
+    if (!music.player || typeof music.player.getCurrentTime !== "function") return;
+    const current = music.player.getCurrentTime();
+    const duration = music.player.getDuration();
+    if (!Number.isFinite(duration) || duration <= 0) return;
+    const ratio = Math.max(0, Math.min(1, current / duration));
+    musicFill.style.width = `${(ratio * 100).toFixed(2)}%`;
+    musicTime.textContent = `${formatTime(current)} / ${formatTime(duration)}`;
+    musicProgress.hidden = false;
   }
 
   function toggleMusic() {
-    if (!state.player || !state.player.contentWindow) return;
-    const shouldPause = state.musicPlaying;
-    state.player.contentWindow.postMessage(
-      JSON.stringify({ event: "command", func: shouldPause ? "pauseVideo" : "playVideo", args: [] }),
-      "*"
-    );
-    state.musicPlaying = !shouldPause;
-    musicToggle.textContent = shouldPause ? "Reprendre" : "Pause";
-    musicToggle.setAttribute("aria-label", shouldPause ? "Reprendre la musique" : "Mettre la musique en pause");
+    if (music.playing) {
+      try {
+        music.player.pauseVideo();
+      } catch (error) {
+        onPlayerError();
+      }
+      return;
+    }
+    startPlayback();
   }
 
   musicToggle.addEventListener("click", toggleMusic);
+
+  // Read-only hook so the automated checks can assert the real player state.
+  window.__roseMusic = {
+    isReady: () => music.ready,
+    volume: () => (music.player && typeof music.player.getVolume === "function" ? music.player.getVolume() : null),
+    playerState: () => (music.player && typeof music.player.getPlayerState === "function" ? music.player.getPlayerState() : null)
+  };
 
   /* --- Answer verification ----------------------------------------------- */
   // SHA-256 digests of normalised answers. The accepted strings are not stored.
