@@ -944,7 +944,7 @@ body.is-dialog-open { overflow: hidden; }
 .final__sentence:focus { outline: none; }
 .final__sentence strong {
   color: var(--burgundy);
-  font-weight: 600;
+  font-weight: 700;
   font-style: italic;
 }
 .final__ornament {
