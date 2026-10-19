@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>La rose aux cent une pétales — 20 octobre</title>
+  <meta name="description" content="Một đóa hồng toán học trăm lẻ một cánh, và một lá thư cho ngày 20/10.">
+  <meta name="theme-color" content="#f5ecdd">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="assets/fonts/cormorant-normal-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="assets/fonts/cormorant-normal-vi.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="assets/fonts/lora-normal-vi.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#lettre">Aller à la lettre</a>
+  <div class="grain" aria-hidden="true"></div>
+  <div class="vignette" aria-hidden="true"></div>
+
+  <main class="sheet">
+    <header class="masthead">
+      <p class="masthead__item" lang="fr">Le vingt octobre</p>
+      <svg class="masthead__mark" viewBox="0 0 24 24" aria-hidden="true">
+        <g fill="none" stroke="currentColor" stroke-width="1">
+          <circle cx="12" cy="12" r="2.1"/>
+          <path d="M12 2.5c2.4 3 3.1 5.7 0 9.5-3.1-3.8-2.4-6.5 0-9.5ZM12 21.5c-2.4-3-3.1-5.7 0-9.5 3.1 3.8 2.4 6.5 0 9.5ZM2.5 12c3-2.4 5.7-3.1 9.5 0-3.8 3.1-6.5 2.4-9.5 0ZM21.5 12c-3 2.4-5.7 3.1-9.5 0 3.8-3.1 6.5-2.4 9.5 0Z"/>
+        </g>
+      </svg>
+      <p class="masthead__item masthead__item--right" lang="fr">Planche CI</p>
+    </header>
+
+    <div class="spread">
+      <section class="plate" aria-labelledby="plateCaption">
+        <div class="plate__stage" id="plateStage">
+          <button class="rose" id="rose" type="button" aria-describedby="roseHint"
+                  aria-label="La rose aux cent une pétales. Activer pour ouvrir un pétale.">
+            <svg class="rose__svg" id="roseSvg" viewBox="0 0 1000 1160" role="img"
+                 aria-labelledby="roseTitle roseDesc">
+              <title id="roseTitle">La rose aux cent une pétales</title>
+              <desc id="roseDesc">Une rose dessinée par géométrie mathématique, composée de cent une pétales.</desc>
+
+              <defs>
+                <linearGradient id="stemGrad" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" stop-color="#7c8874"/>
+                  <stop offset=".52" stop-color="#66735f"/>
+                  <stop offset="1" stop-color="#4c5948"/>
+                </linearGradient>
+                <linearGradient id="leafGrad" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" stop-color="#7e8a74"/>
+                  <stop offset=".6" stop-color="#67745f"/>
+                  <stop offset="1" stop-color="#505d4b"/>
+                </linearGradient>
+                <linearGradient id="petalSheen" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#fff6ea" stop-opacity=".30"/>
+                  <stop offset=".42" stop-color="#fff6ea" stop-opacity=".05"/>
+                  <stop offset="1" stop-color="#360c18" stop-opacity=".12"/>
+                </linearGradient>
+                <linearGradient id="petalSide" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0" stop-color="#260611" stop-opacity=".40"/>
+                  <stop offset=".24" stop-color="#260611" stop-opacity=".07"/>
+                  <stop offset=".62" stop-color="#fff3e2" stop-opacity=".01"/>
+                  <stop offset=".93" stop-color="#fff3e2" stop-opacity=".16"/>
+                  <stop offset="1" stop-color="#fff3e2" stop-opacity=".04"/>
+                </linearGradient>
+                <radialGradient id="petalBase" cx=".5" cy="1" r=".72">
+                  <stop offset="0" stop-color="#2c0814" stop-opacity=".5"/>
+                  <stop offset=".62" stop-color="#2c0814" stop-opacity=".11"/>
+                  <stop offset="1" stop-color="#2c0814" stop-opacity="0"/>
+                </radialGradient>
+                <radialGradient id="heartGrad" cx=".5" cy=".5" r=".5">
+                  <stop offset="0" stop-color="#2f0a15"/>
+                  <stop offset=".7" stop-color="#4c1422"/>
+                  <stop offset="1" stop-color="#5d1c2b"/>
+                </radialGradient>
+                <radialGradient id="groundGlow" cx=".5" cy=".5" r=".5">
+                  <stop offset="0" stop-color="#5d2431" stop-opacity=".18"/>
+                  <stop offset=".68" stop-color="#5d2431" stop-opacity=".07"/>
+                  <stop offset="1" stop-color="#5d2431" stop-opacity="0"/>
+                </radialGradient>
+                <radialGradient id="bloomLight" cx=".36" cy=".3" r=".7">
+                  <stop offset="0" stop-color="#fff8ea" stop-opacity=".7"/>
+                  <stop offset=".55" stop-color="#ffe9cf" stop-opacity=".22"/>
+                  <stop offset="1" stop-color="#ffe9cf" stop-opacity="0"/>
+                </radialGradient>
+              </defs>
+
+              <g class="stem" aria-hidden="true">
+                <path class="stem__shade" d="M500 400 C493 560 512 690 506 800 C501 902 512 1010 522 1124"
+                      fill="none" stroke="#40503f" stroke-width="13" stroke-linecap="round" opacity=".26"/>
+                <path class="stem__line" d="M500 400 C493 560 512 690 506 800 C501 902 512 1010 522 1124"
+                      fill="none" stroke="url(#stemGrad)" stroke-width="8.5" stroke-linecap="round"/>
+                <path class="stem__light" d="M497 430 C490 560 509 690 503 800 C498 902 509 1010 519 1118"
+                      fill="none" stroke="#c9d0bd" stroke-width="1.6" stroke-linecap="round" opacity=".42"/>
+
+                <g class="leaf leaf--left">
+                  <path d="M509 902 C456 908 390 934 326 986 C372 1002 438 992 486 962 C504 950 512 926 509 902 Z"
+                        fill="url(#leafGrad)" stroke="#46543f" stroke-width="1.2"/>
+                  <path d="M507 908 C450 922 390 944 334 982" fill="none" stroke="#c3cbb2" stroke-width="1.3" opacity=".55"/>
+                  <path d="M470 936 C452 926 440 920 424 914 M438 952 C420 947 404 943 388 941 M412 966 C400 962 388 960 376 958"
+                        fill="none" stroke="#c3cbb2" stroke-width=".9" opacity=".32"/>
+                </g>
+
+                <g class="leaf leaf--right">
+                  <path d="M512 1008 C566 990 632 986 700 998 C666 1030 606 1046 552 1038 C532 1035 518 1024 512 1008 Z"
+                        fill="url(#leafGrad)" stroke="#46543f" stroke-width="1.2"/>
+                  <path d="M514 1010 C572 1000 634 996 694 1000" fill="none" stroke="#c3cbb2" stroke-width="1.3" opacity=".55"/>
+                  <path d="M566 1010 C584 1004 600 1002 616 1002 M600 1020 C616 1018 632 1018 648 1020 M634 1014 C646 1014 658 1015 668 1016"
+                        fill="none" stroke="#c3cbb2" stroke-width=".9" opacity=".32"/>
+                </g>
+
+                <g class="leaf leaf--low">
+                  <path d="M519 1072 C486 1056 448 1050 410 1058 C426 1082 460 1096 496 1092 C512 1090 520 1083 519 1072 Z"
+                        fill="url(#leafGrad)" stroke="#46543f" stroke-width="1.1"/>
+                  <path d="M517 1072 C482 1064 448 1060 416 1062" fill="none" stroke="#c3cbb2" stroke-width="1.1" opacity=".5"/>
+                </g>
+
+                <path d="M508 858 C520 852 530 854 538 862 C526 866 516 865 508 858 Z" fill="#4d5c47" opacity=".9"/>
+                <path d="M509 1042 C497 1036 487 1038 479 1046 C491 1050 501 1049 509 1042 Z" fill="#4d5c47" opacity=".85"/>
+              </g>
+
+              <g class="rose__flower" id="flower" transform="translate(500 400)">
+                <ellipse class="rose__ground" cx="0" cy="30" rx="365" ry="350" fill="url(#groundGlow)"/>
+                <circle class="rose__heart" cx="0" cy="0" r="38" fill="url(#heartGrad)"/>
+                <circle class="rose__hit" data-rose-hit cx="0" cy="0" r="402" fill="transparent" pointer-events="all"/>
+                <g id="petals" class="petals"></g>
+                <g class="rose__knot" aria-hidden="true">
+                  <path d="M1 2C-9-4-8-17 3-18c12-1 16 12 8 19-6 5-15 2-15-5" fill="none" stroke="#2f0a15" stroke-width="2.3" stroke-linecap="round" opacity=".45"/>
+                  <path d="M0 0C-4-4-2-9 3-9 8-9 9-3 5 0" fill="none" stroke="#efc9c4" stroke-width=".7" stroke-linecap="round" opacity=".14"/>
+                </g>
+                <circle class="rose__bloomlight" cx="0" cy="0" r="380" fill="url(#bloomLight)"
+                        opacity="0" pointer-events="none"/>
+              </g>
+
+              <g class="botanical-notes" aria-hidden="true" lang="fr">
+                <path d="M796 214 C748 234 716 258 676 292" fill="none" stroke="#b49a65" stroke-width="1" opacity=".55"/>
+                <text x="802" y="206" text-anchor="end" class="note note--name">Rosa centifolia</text>
+                <text x="802" y="226" text-anchor="end" class="note note--small">var. centum una</text>
+                <text x="66" y="520" text-anchor="middle" class="note note--small note--vertical"
+                      transform="rotate(-90 66 520)">planche CI</text>
+                <path d="M736 470 C780 492 806 512 830 540" fill="none" stroke="#b49a65" stroke-width="1" opacity=".35"/>
+                <text x="836" y="552" class="note note--small" opacity=".8">pétale XCIX</text>
+              </g>
+            </svg>
+          </button>
+          <p class="plate__folio" aria-hidden="true" lang="fr">Fig. 1</p>
+        </div>
+        <p class="plate__caption" id="plateCaption" lang="fr">
+          <span>Rosa centifolia</span>
+          <span class="plate__rule" aria-hidden="true"></span>
+          <span>cent une pétales</span>
+        </p>
+      </section>
+
+      <section class="letter" id="lettre" tabindex="-1" aria-label="La lettre du vingt octobre">
+        <div class="letter__opening-wrap">
+          <div class="letter__opening" id="opening">
+            <p class="kicker" lang="fr">Fleur de papier · 20 · X</p>
+            <h1 class="display" lang="fr">La rose<br><em>aux cent une</em><br>pétales</h1>
+            <p class="epigraph" lang="fr">« Une rose ne s'ouvre jamais deux fois de la même manière. »</p>
+            <p class="hint" id="roseHint">
+              <span class="hint__vi" lang="vi">Chạm vào hoa hồng để mở từng cánh.</span>
+              <span class="hint__fr" lang="fr">Un pétale à la fois.</span>
+            </p>
+          </div>
+        </div>
+
+        <div class="progress" id="progressBlock" lang="fr">
+          <div class="progress__head">
+            <span class="progress__label">Pétales épanouis</span>
+            <span class="progress__value">
+              <span id="count">00</span><span class="progress__total">/ 101</span>
+            </span>
+          </div>
+          <div class="progress__ruler" id="ruler" role="progressbar" aria-valuemin="0" aria-valuemax="101"
+               aria-valuenow="0" aria-valuetext="0 pétales sur 101" aria-label="Pétales épanouis"></div>
+        </div>
+
+        <div class="letter__bloom" id="bloom" hidden></div>
+
+        <footer class="colophon" aria-hidden="true" lang="fr">
+          <span>20 · X</span>
+          <span class="colophon__rule"></span>
+          <span>fait à la main, par les nombres</span>
+        </footer>
+      </section>
+    </div>
+  </main>
+
+  <dialog id="secretDialog" class="secret" aria-labelledby="secretTitle">
+    <div class="secret__sheet">
+      <span class="secret__seal" aria-hidden="true">
+        <svg viewBox="0 0 64 64">
+          <circle cx="32" cy="32" r="30" fill="none" stroke="currentColor" stroke-width="1" opacity=".55"/>
+          <circle cx="32" cy="32" r="23" fill="none" stroke="currentColor" stroke-width=".7" opacity=".45"/>
+          <g fill="none" stroke="currentColor" stroke-width="1.1">
+            <path d="M32 16c5 6 6 11 0 16-6-5-5-10 0-16ZM32 48c-5-6-6-11 0-16 6 5 5 10 0 16ZM16 32c6-5 11-6 16 0-5 6-10 5-16 0ZM48 32c-6 5-11 6-16 0 5-6 10-5 16 0Z"/>
+            <circle cx="32" cy="32" r="2.4"/>
+          </g>
+        </svg>
+      </span>
+
+      <div class="secret__scroll">
+      <header class="secret__head">
+        <p class="kicker" lang="fr">Lettre scellée · II</p>
+        <button class="secret__close" id="closeSecret" type="button" lang="fr">
+          Refermer <span aria-hidden="true">×</span>
+        </button>
+      </header>
+
+      <div class="secret__content">
+        <h2 class="secret__title" id="secretTitle" lang="fr">Un secret pour<br><em>mon petit détective</em></h2>
+        <p class="secret__lede" lang="fr">Deux réponses, et le cachet se brisera.</p>
+
+        <form class="quiz" id="secretForm" novalidate>
+          <div class="field" id="fieldDate">
+            <label for="answerDate">
+              <span class="field__num" lang="fr">I.</span>
+              <span lang="vi">Người viết tấm thiệp này sinh ngày, tháng, năm nào?</span>
+            </label>
+            <input id="answerDate" name="date" type="text" inputmode="numeric" autocomplete="off"
+                   spellcheck="false" placeholder="Votre réponse" aria-describedby="dateState">
+            <p class="field__state" id="dateState" aria-live="polite"></p>
+          </div>
+
+          <div class="field" id="fieldBook">
+            <label for="answerBook">
+              <span class="field__num" lang="fr">II.</span>
+              <span lang="vi">Triết lý phi lý của Albert Camus được thể hiện rõ trong tác phẩm nào của ông? Hãy nhập tên tác phẩm bằng tiếng Việt.</span>
+            </label>
+            <input id="answerBook" name="book" type="text" autocomplete="off" spellcheck="false"
+                   placeholder="Votre réponse" aria-describedby="bookState">
+            <p class="field__state" id="bookState" aria-live="polite"></p>
+          </div>
+
+          <div class="quiz__foot">
+            <button class="seal-button" id="verifyBtn" type="submit" lang="fr">Briser le cachet</button>
+            <p class="form-status" id="formStatus" role="status" aria-live="polite"></p>
+          </div>
+        </form>
+
+        <section class="sequence" id="sequence" hidden aria-labelledby="sequenceTitle">
+          <p class="kicker" id="sequenceTitle" lang="fr">Le cachet est brisé</p>
+          <div class="sequence__stage">
+            <button class="word-button" id="sequenceBtn" type="button" lang="fr">
+              <span id="wordLabel">Une</span>
+            </button>
+            <div class="sequence__rule" aria-hidden="true"><span id="sequenceProgress"></span></div>
+          </div>
+          <p class="visually-hidden" id="sequenceStatus" aria-live="polite" lang="fr"></p>
+        </section>
+
+        <section class="final" id="final" hidden>
+          <p class="final__mark" lang="fr">20 · X</p>
+          <p class="final__sentence" id="finalSentence" tabindex="-1" lang="fr"></p>
+          <svg class="final__ornament" viewBox="0 0 60 20" aria-hidden="true">
+            <path d="M2 10h18M40 10h18M24 10c2-5 4-5 6 0-2 5-4 5-6 0Z" fill="none" stroke="currentColor" stroke-width=".9"/>
+            <circle cx="30" cy="10" r="1.6" fill="currentColor"/>
+          </svg>
+        </section>
+      </div>
+
+      <footer class="secret__music" lang="fr">
+        <div class="music__meta">
+          <p class="kicker">Bande sonore</p>
+          <button class="music__toggle" id="musicToggle" type="button" hidden>Pause</button>
+          <p class="music__note">Si le silence persiste, lancez la lecture dans le lecteur.</p>
+          <a class="music__link" href="https://www.youtube.com/watch?v=cvamJ4oKBGY"
+             target="_blank" rel="noopener noreferrer">Ouvrir sur YouTube</a>
+        </div>
+        <div class="music__player" id="playerMount"></div>
+      </footer>
+      </div>
+    </div>
+  </dialog>
+
+  <script src="script.js"></script>
+</body>
+</html>

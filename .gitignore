@@ -1,0 +1,9 @@
+# Local-only working notes
+# The original creative brief contains the puzzle answers and is not part of
+# the published site or the public repository.
+prompt.md
+
+# Editor and OS noise
+.DS_Store
+Thumbs.db
+desktop.ini
