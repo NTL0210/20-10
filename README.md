@@ -2,7 +2,7 @@
 
 An interactive greeting for Vietnamese Women's Day, 20 October. A closed,
 mathematically drawn rose opens one petal per click. After the hundred-and-first
-petal, the rose settles and reveals a Vietnamese letter. A discreet inscription
+petal, the rose reveals a Vietnamese letter. A discreet inscription
 inside that letter opens a sealed French puzzle: two Vietnamese questions, a
 six-word sequence, and a final literary sentence. The whole experience is a
 static site with no build step, backend, or API key; the only third-party
@@ -36,24 +36,50 @@ there are no pre-drawn petals. One hundred and one distinct `<g class="petal">`
 elements are built from a rose-specific construction:
 
 - **The petal.** A rose petal is not a daisy ray: it never narrows to a point.
-  Each petal rises from a narrow claw, flares into broad shoulders and closes in
-  a domed, faintly notched, softly waved rim. The spine of the petal is curved
-  and every petal sweeps the same way, so the head wraps into one spiral instead
-  of radiating. The outline is sampled, fitted with Catmull-Rom Bézier segments
-  and stored once as a `<defs>` path referenced by `<use>` shading layers.
+  Each petal rises from a broad claw, flares into soft shoulders and closes in a
+  tall, domed, faintly notched rim with two slow undulations rather than a row
+  of small ripples. The spine of the petal is curved and every petal sweeps the
+  same way, so the head wraps into one spiral instead of radiating. The outline
+  is sampled, fitted with Catmull-Rom Bézier segments and stored once as a
+  `<defs>` path referenced by `<use>` shading layers.
 - **The arrangement.** Petals are attached at the receptacle and placed on a
   golden-angle spiral, with a short steady step for the first few so the folded
-  centre chains into a visible spiral roll. Radius and length carry a strong
-  size gradient — a dense, crumpled, incurved centre and a handful of very large
-  outer petals — so the head never resolves into rings of similar-sized petals.
-  Each petal has its own lean, curvature, curl, ruffle, asymmetry and palette
-  tint; the centre is jittered harder than the rim so it reads as folded cloth
-  rather than a neat rosette.
-- **The light.** A rolled-edge gradient (shadow, then a bright rim, then a dark
-  folded edge), a cupped face gradient, a base shadow and a blurred cast shadow
-  sit under a global directional light across the whole bloom, whose scale and
-  opacity follow the bloom. A separate decorative knot at the centre is not
-  counted as a petal.
+  centre chains into a visible spiral roll. Radius, length, tilt and width carry
+  a strong gradient from a dense, crumpled, incurved centre to broad outer
+  petals; the outer third grows progressively, so the silhouette is made of
+  overlapping lobes rather than a handful of flat plates. Inner petals stay
+  foreshortened even when open, as if standing inside the cup, while outer
+  petals lie flat. Each petal has its own lean, curvature, curl, ruffle,
+  asymmetry, palette tint and light-facing tone; the centre is jittered harder
+  than the rim so it reads as folded cloth rather than a neat rosette.
+- **The light.** A rolled-edge gradient, a cupped face gradient, a base shadow
+  and a soft cast shadow sit under a global directional light across the whole
+  bloom. The cast shadow falls down and to the right, matching the upper-left
+  light, and stays low-contrast so petals read as overlapping surfaces rather
+  than cut paper. The lighting overlay fades in with the bloom; it has no
+  separate pulse or glow.
+
+### Motion design
+
+The page is composed on arrival: there is no staggered entrance choreography,
+no parallax, no floating ornament, no whole-flower zoom and no bloom-light
+pulse. Motion is reserved for state changes:
+
+- **Petals.** One `requestAnimationFrame` tween per accepted click, 470–720 ms,
+  ease-in-out. The petal rotates outward from its wrapped closed angle, expands
+  and moves to its open radius; timing follows the petal's depth, not a random
+  dice roll. Under reduced motion the state is applied immediately.
+- **Progress.** One ruler tick inks in per petal; the counter changes at once.
+  Ticks keep a fixed height so the ruler does not ripple.
+- **Letter.** The opening column collapses over 0.55 s and the greeting fades
+  in as one block. There is no per-line stagger.
+- **Sealed letter.** A 0.18 s backdrop and a 0.24 s sheet fade, no scale or
+  slide; the seal stays still. The sequence word crossfades in 0.15 s and the
+  rule advances in 0.5 s.
+- **Finale.** The sentence and ornament fade in together over 0.55 s with an
+  8 px rise; no particles, glow or zoom.
+- **Soundtrack.** The five-bar wave animates only while the player is actually
+  playing. Hover states change colour, not position.
 
 ## Run locally
 
@@ -102,8 +128,8 @@ relative so the same files also work from a repository subpath.
 
 Keyboard and assistive-technology clicks are supported, focus moves into the
 dialog, Escape or the backdrop closes it, and focus returns to the inscription.
-`prefers-reduced-motion` removes decorative delays and petal tweening while
-keeping every state change available.
+`prefers-reduced-motion` removes transitions and petal tweening while keeping
+every state change available.
 
 ## GitHub Pages
 
@@ -148,8 +174,9 @@ After the first successful publish:
    missing asset.
 2. Check that the favicon and both typefaces load; Cormorant Garamond should
    appear in the heading and Lora in the body text.
-3. Click the rose once and confirm the counter moves from `00` to `01`, then
-   reload and confirm it returns to `00`.
+3. Confirm the closed flower reads as a rosebud, click it once, and check that
+   exactly one petal unfolds, the counter moves from `00` to `01`, and no
+   unrelated section moves. Reload and confirm it returns to `00`.
 4. Open DevTools → **Network** and confirm `styles.css`, `script.js`, the woff2
    files, and `assets/favicon.svg` all return `200` (not `404`).
 5. Open DevTools → **Console** and confirm there are no errors.
