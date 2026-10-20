@@ -295,6 +295,7 @@
     el.setAttribute("data-ring", String(ring));
     el.setAttribute("data-order", String(index));
     el.setAttribute("data-petal", "");
+    el.setAttribute("data-state", "closed");
     el.innerHTML = `
       <g class="petal__slide" transform="translate(0 ${(-baseClosed).toFixed(2)}) rotate(${tiltClosed.toFixed(2)})">
         <g class="petal__fold" transform="scale(${closedSX.toFixed(3)} ${closedSY.toFixed(3)}) rotate(${twistClosed.toFixed(2)})">
@@ -333,7 +334,7 @@
       twistOpen,
       tiltClosed,
       tiltOpen,
-      opened: false,
+      status: "closed",
       duration
     });
   }
@@ -354,26 +355,27 @@
   }
 
   function animatePetal(record) {
-    if (prefersReduced()) {
-      applyPetalState(record, 1);
-      return Promise.resolve();
-    }
+    // Reduced motion still shows a short, simple unfold rather than disabling
+    // the experience. The automatic cadence remains one petal per second.
+    const reducedAtStart = prefersReduced();
+    const duration = reducedAtStart ? 120 : record.duration;
+
     return new Promise((resolve) => {
       const start = performance.now();
       const frame = (now) => {
         // If the reader turns on reduced motion mid-unfold, settle the petal
-        // immediately instead of finishing the tween.
-        if (prefersReduced()) {
+        // immediately instead of finishing the long tween.
+        if (!reducedAtStart && prefersReduced()) {
           applyPetalState(record, 1);
           resolve();
           return;
         }
-        const t = Math.min(1, (now - start) / record.duration);
-        // A slow start and a soft landing: the petal lifts out of the bud and
-        // settles, rather than springing open.
-        const eased = t < 0.5
-          ? 4 * t * t * t
-          : 1 - Math.pow(-2 * t + 2, 3) / 2;
+        const t = Math.min(1, (now - start) / duration);
+        const eased = reducedAtStart
+          ? t
+          : t < 0.5
+            ? 4 * t * t * t
+            : 1 - Math.pow(-2 * t + 2, 3) / 2;
         applyPetalState(record, eased);
         if (t < 1) requestAnimationFrame(frame);
         else resolve();
@@ -414,8 +416,6 @@
   /* --- State ------------------------------------------------------------- */
   const state = {
     phase: "initial",
-    opened: 0,
-    animating: false,
     greetingBuilt: false,
     secretOpened: false,
     verifying: false,
@@ -424,69 +424,136 @@
     sequenceStep: 0,
     sequenceLocked: false,
     completed: false,
-    closing: false
+    closing: false,
+    bloomFinished: false
   };
 
   /* --- Rose interaction -------------------------------------------------- */
   const roseBtn = document.getElementById("rose");
   const plate = document.querySelector(".plate");
   const letter = document.getElementById("lettre");
+  const AUTO_BLOOM_INTERVAL = 1000;
+  let autoBloomTimer = null;
 
-  function handleRoseClick(event) {
-    if (state.phase !== "initial" && state.phase !== "blooming") return;
-    if (state.animating || state.opened >= TOTAL_PETALS) return;
+  function countPetals(status) {
+    return petals.reduce(
+      (total, record) => total + (record.status === status ? 1 : 0),
+      0
+    );
+  }
 
-    // Pointer clicks must land on the flower; keyboard/assistive clicks are always accepted.
-    if (event && event.detail !== 0) {
-      const target = event.target;
-      if (!(target instanceof Element) || !target.closest("[data-petal], [data-rose-hit]")) return;
+  function updateRoseLabel() {
+    const opened = countPetals("open");
+    const countLabel = opened === 1 ? "1 pétale ouvert" : `${opened} pétales ouverts`;
+    roseBtn.setAttribute(
+      "aria-label",
+      opened >= TOTAL_PETALS
+        ? "La rose aux cent une pétales est entièrement épanouie."
+        : `La rose aux cent une pétales. ${countLabel}. Activer pour ouvrir un pétale.`
+    );
+  }
+
+  function stopAutoBloom() {
+    if (autoBloomTimer !== null) {
+      window.clearInterval(autoBloomTimer);
+      autoBloomTimer = null;
     }
+  }
 
-    // A pointer click on a specific closed petal opens that petal. Any other
-    // accepted click (the hit area, or an already-opened petal) opens the next
-    // unopened petal, centre outward — so the flower still unfolds in order.
-    let record = null;
-    if (event && event.detail !== 0 && event.target instanceof Element) {
-      const petalEl = event.target.closest("[data-petal]");
-      if (petalEl) {
-        const hit = petals.find((candidate) => candidate.el === petalEl);
-        if (hit && !hit.opened) record = hit;
+  function startAutoBloom() {
+    if (autoBloomTimer !== null || state.bloomFinished) return;
+
+    // One interval owns the automatic sequence. Every tick selects at most one
+    // closed petal; manually selected petals are already "opening"/"open" and
+    // are therefore skipped.
+    autoBloomTimer = window.setInterval(() => {
+      if (state.bloomFinished) {
+        stopAutoBloom();
+        return;
       }
-    }
-    if (!record) {
-      record = petals.find((candidate) => !candidate.opened) || null;
-    }
-    if (!record) return;
+      const next = petals.find((record) => record.status === "closed");
+      if (!next) {
+        stopAutoBloom();
+        return;
+      }
+      openPetal(next, "auto");
+    }, AUTO_BLOOM_INTERVAL);
+  }
 
-    state.phase = "blooming";
-    state.animating = true;
-    loadMusicApi();               // warm up the player during early engagement
+  function openPetal(record, source) {
+    // This guard is the concurrency boundary: a petal can only be claimed once.
+    if (!record || record.status !== "closed" || state.bloomFinished) return false;
+
+    record.status = "opening";
+    record.el.setAttribute("data-state", "opening");
+    record.el.setAttribute("data-source", source);
+    record.el.classList.add("is-opening");
+    if (state.phase === "initial") state.phase = "blooming";
     plate.classList.add("has-begun");
     roseBtn.setAttribute("aria-busy", "true");
-    record.opened = true;
-    record.el.classList.add("is-open");
 
     animatePetal(record).then(() => {
-      state.opened += 1;
-      state.animating = false;
-      roseBtn.removeAttribute("aria-busy");
-      setProgress(state.opened);
-      roseBtn.setAttribute(
-        "aria-label",
-        state.opened >= TOTAL_PETALS
-          ? "La rose aux cent une pétales est entièrement épanouie."
-          : `La rose aux cent une pétales. ${state.opened} pétales ouverts. Activer pour ouvrir le pétale suivant.`
-      );
-      if (state.opened >= TOTAL_PETALS) finishBloom();
+      // Only the transition that claimed this petal may complete it.
+      if (record.status !== "opening") return;
+      record.status = "open";
+      record.el.setAttribute("data-state", "open");
+      record.el.classList.remove("is-opening");
+      record.el.classList.add("is-open");
+
+      const opened = countPetals("open");
+      setProgress(opened);
+      updateRoseLabel();
+      if (!petals.some((candidate) => candidate.status === "opening")) {
+        roseBtn.removeAttribute("aria-busy");
+      }
+      if (opened >= TOTAL_PETALS) finishBloom();
     });
+    return true;
+  }
+
+  function handleRoseClick(event) {
+    if (state.bloomFinished) return;
+    if (state.phase !== "initial" && state.phase !== "blooming") return;
+
+    let record = null;
+    if (event && event.detail !== 0) {
+      // Pointer clicks must land on the flower.
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const petalEl = target.closest("[data-petal]");
+      if (petalEl) {
+        const hit = petals.find((candidate) => candidate.el === petalEl);
+        // Clicking a petal that is already opening or open does nothing: it
+        // must not restart, duplicate, or open a different petal by accident.
+        if (!hit || hit.status !== "closed") return;
+        record = hit;
+      } else if (target.closest("[data-rose-hit]")) {
+        record = petals.find((candidate) => candidate.status === "closed") || null;
+      } else {
+        return;
+      }
+    } else {
+      // Keyboard and assistive clicks target the rose button itself.
+      record = petals.find((candidate) => candidate.status === "closed") || null;
+    }
+
+    if (!record) return;
+    // The YouTube player is loaded only when the sealed letter is opened, so
+    // an early petal click cannot compete with the automatic bloom.
+    openPetal(record, "manual");
   }
 
   function finishBloom() {
+    if (state.bloomFinished) return;
+    state.bloomFinished = true;
     state.phase = "blooming";
+    stopAutoBloom();
     roseBtn.disabled = true;
+    roseBtn.removeAttribute("aria-busy");
     roseBtn.classList.add("is-bloomed");
     plate.classList.add("is-bloomed");
     setProgress(TOTAL_PETALS);
+    updateRoseLabel();
     // The last petal has already settled; give the final progress mark a beat
     // to register, then let the letter take over without a staged pause.
     setTimeout(unlockGreeting, prefersReduced() ? 40 : 280);
@@ -730,9 +797,9 @@
     if (musicSection) musicSection.classList.toggle("is-playing", playing);
   }
 
-  // The IFrame API is loaded the first time the reader interacts with the
-  // rose, so the player is ready (and can be started synchronously from a
-  // genuine click) long before the sealed letter is opened.
+  // The IFrame API is loaded only when the reader opens the sealed letter. That
+  // keeps third-party work out of the bloom and still starts playback from a
+  // genuine click.
   function loadMusicApi() {
     if (music.apiLoading || music.apiReady) return;
     music.apiLoading = true;
@@ -1080,6 +1147,19 @@
   /* --- Initialise -------------------------------------------------------- */
   setProgress(0);
   updateSequenceRule();
+  updateRoseLabel();
+
+  // Every fresh page load starts from the generated all-closed records above.
+  // No petal state or progress is written to storage, cookies, the URL or a
+  // backend. A bfcache restoration is forced back through a fresh load so a
+  // returning recipient cannot inherit an already-opened flower.
+  window.addEventListener("pagehide", stopAutoBloom);
+  window.addEventListener("pageshow", (event) => {
+    if (event.persisted) {
+      stopAutoBloom();
+      window.location.reload();
+    }
+  });
 
   if (typeof reduceQuery.addEventListener === "function") {
     reduceQuery.addEventListener("change", () => {
@@ -1087,10 +1167,15 @@
       // without leaving a stale transform behind.
       if (prefersReduced()) {
         petals.forEach((record) => {
-          if (record.opened) applyPetalState(record, 1);
+          if (record.status === "opening") applyPetalState(record, 1);
         });
       }
     });
   }
+
+  // Automatic blooming is not optional and starts only after every petal has
+  // been generated in the closed state. The first automatic petal is selected
+  // one second after this point.
+  startAutoBloom();
 
 })();

@@ -1,8 +1,9 @@
 # La rose aux cent une pétales
 
 An interactive greeting for Vietnamese Women's Day, 20 October. A closed,
-mathematically drawn rose opens one petal per click. After the hundred-and-first
-petal, the rose reveals a Vietnamese letter. A discreet inscription
+mathematically drawn rose opens itself one petal per second, while every
+unopened petal also responds immediately to a click. After the
+hundred-and-first petal, the rose reveals a Vietnamese letter. A discreet inscription
 inside that letter opens a sealed French puzzle: two Vietnamese questions, a
 six-word sequence, and a final literary sentence. The whole experience is a
 static site with no build step, backend, or API key; the only third-party
@@ -65,12 +66,29 @@ The page is composed on arrival: there is no staggered entrance choreography,
 no parallax, no floating ornament, no whole-flower zoom and no bloom-light
 pulse. Motion is reserved for state changes:
 
-- **Petals.** One `requestAnimationFrame` tween per accepted click, 470–720 ms,
-  ease-in-out. The petal rotates outward from its wrapped closed angle, expands
-  and moves to its open radius; timing follows the petal's depth, not a random
-  dice roll. Under reduced motion the state is applied immediately.
-- **Progress.** One ruler tick inks in per petal; the counter changes at once.
-  Ticks keep a fixed height so the ruler does not ripple.
+- **Automatic bloom.** A single interval claims one closed petal per second,
+  centre outward, and keeps running while the reader clicks. It never starts a
+  petal twice, and it is cleared when the final petal finishes. If no closed
+  petals remain, its next tick stops it as well.
+- **Manual petals.** Every closed petal is directly clickable and opens at once,
+  without waiting for the next automatic tick. Clicking a petal that is already
+  opening or open does nothing; it cannot restart the animation or change the
+  count. Automatic selection skips every petal that is already claimed.
+- **Petal animation.** One `requestAnimationFrame` tween per claimed petal,
+  470–720 ms, ease-in-out. The petal rotates outward from its wrapped closed
+  angle, expands and moves to its open radius; timing follows the petal's depth,
+  not a random dice roll. At reduced motion the same unfold runs over 120 ms,
+  linear, so the automatic cadence and clicks remain fully functional.
+- **Petal state.** `closed` → `opening` → `open` is the single source of truth,
+  mirrored in `data-state` and the `is-opening`/`is-open` classes. A petal is
+  claimed exactly once. The counter and ruler represent **fully open** petals;
+  they advance when that petal's unfold finishes, never beyond 101.
+- **Progress.** One ruler tick inks in per finished petal. Ticks keep a fixed
+  height so the ruler does not ripple. The final petal stops the scheduler and
+  unlocks the letter.
+- **Fresh visits.** Petal records are created in memory on every load; nothing
+  is written to local storage, session storage, cookies, IndexedDB, the URL or a
+  backend. A bfcache restoration is forced through a fresh load.
 - **Letter.** The opening column collapses over 0.55 s and the greeting fades
   in as one block. There is no per-line stagger.
 - **Sealed letter.** A 0.18 s backdrop and a 0.24 s sheet fade, no scale or
@@ -104,16 +122,19 @@ relative so the same files also work from a repository subpath.
 
 ## Interaction map
 
-1. **Rose.** Click the flower, or focus it and press Enter or Space. Exactly one
-   unopened petal animates per accepted click. The counter and ruler show
-   completed openings, from `00 / 101` to `101 / 101`. Input is ignored while a
-   petal is animating.
+1. **Rose.** The flower starts closed and automatically opens one petal every
+   second. Click an unopened petal to open that specific petal immediately, or
+   click the central flower / focus the rose and press Enter or Space to open
+   the next closed petal. The automatic sequence continues at its normal cadence
+   and skips petals that are already opening. Clicks on opening or open petals
+   are ignored. The counter and ruler show fully opened petals, from
+   `00 / 101` to `101 / 101`, and stop at 101.
 2. **Greeting.** The letter is built only when the 101st petal finishes. It
    contains the Vietnamese greeting and the button
    `Un secret pour mon petit détective`.
 3. **Sealed letter.** Opening the secret loads the official YouTube IFrame
-   Player API (once, on first interaction with the rose), starts the soundtrack
-   at 35 % volume and shows the two Vietnamese questions. The player node is
+   Player API (once, on that click), starts the soundtrack at 35 % volume and
+   shows the two Vietnamese questions. The player node is
    never shown; the soundtrack is presented with a compact play/pause control,
    a live sound-wave indicator, a real playback status line, an honest progress
    line and the **Ouvrir sur YouTube** link. Reopening reuses the same player.
@@ -174,9 +195,10 @@ After the first successful publish:
    missing asset.
 2. Check that the favicon and both typefaces load; Cormorant Garamond should
    appear in the heading and Lora in the body text.
-3. Confirm the closed flower reads as a rosebud, click it once, and check that
-   exactly one petal unfolds, the counter moves from `00` to `01`, and no
-   unrelated section moves. Reload and confirm it returns to `00`.
+3. Confirm the closed flower reads as a rosebud. After one second, check that
+   exactly one petal unfolds; click another unopened petal and check that it
+   opens immediately while the automatic cadence continues. Reload and confirm
+   the counter returns to `00` with all petals closed.
 4. Open DevTools → **Network** and confirm `styles.css`, `script.js`, the woff2
    files, and `assets/favicon.svg` all return `200` (not `404`).
 5. Open DevTools → **Console** and confirm there are no errors.
@@ -205,18 +227,18 @@ After the first successful publish:
 - **The workflow cannot deploy.** Confirm the repository allows GitHub Actions
   and that Pages is enabled. Organisation policies can restrict the
   `github-pages` environment.
-- **The rose is hard to click on a phone.** Tap the flower itself, not the
-  surrounding paper. If motion is reduced, petals change state immediately and
-  the next tap is accepted as soon as the state updates.
+- **The rose is hard to click on a phone.** Tap an unopened petal on the flower
+  itself, not the surrounding paper. The automatic bloom also continues without
+  input. With reduced motion the unfold is a 120 ms linear change, and the next
+  tap is accepted as soon as that short state change settles.
 
 ## Soundtrack (audio-focused)
 
 The soundtrack is the official player for
 <https://www.youtube.com/watch?v=cvamJ4oKBGY>, driven through the **YouTube
-IFrame Player API**. The player is created only after the visitor first
-interacts with the rose, so it is ready (and can be started synchronously from
-the click on `Un secret pour mon petit détective`) by the time the letter opens.
-There is never more than one player.
+IFrame Player API**. The player is created only when the visitor clicks
+`Un secret pour mon petit détective`, so the third-party script never competes
+with the automatic bloom. There is never more than one player.
 
 The interface is deliberately audio-focused: no video frame, no thumbnail and
 no black rectangle are shown. The player node is moved out of view and the
