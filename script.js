@@ -947,6 +947,15 @@
     }
   }
 
+  function playerCurrentTime() {
+    if (!music.player || typeof music.player.getCurrentTime !== "function") return 0;
+    try {
+      return music.player.getCurrentTime();
+    } catch (error) {
+      return 0;
+    }
+  }
+
   function safeUnmute() {
     if (!music.player || typeof music.player.unMute !== "function") return;
     try {
@@ -991,6 +1000,14 @@
       if (currentState === YT_PLAYING && !playerMuted()) {
         // The state event may have raced the watchdog. Treat the real player
         // state as the source of truth rather than reporting a false block.
+        onPlayerStateChange({ data: YT_PLAYING });
+        return;
+      }
+      // During some ad/stream transitions YouTube reports UNSTARTED or
+      // BUFFERING while the media clock is already running. A real current
+      // time is stronger evidence of playback than the transient state label.
+      if (!playerMuted() && playerCurrentTime() >= 0.75 &&
+          (currentState === YT_UNSTARTED || currentState === YT_BUFFERING)) {
         onPlayerStateChange({ data: YT_PLAYING });
         return;
       }
@@ -1160,7 +1177,11 @@
     } else if (status === YT_BUFFERING) {
       if (music.wanted && !music.blocked) setMusicStatus("Chargement de la musique…");
     } else if (status === YT_UNSTARTED || status === YT_CUED) {
-      if (music.wanted && !music.blocked) setMusicStatus("Chargement de la musique…");
+      // Once the watchdog has confirmed a running media clock, a transient
+      // UNSTARTED event must not replace the live status with "Chargement".
+      if (music.wanted && !music.blocked && !music.playing) {
+        setMusicStatus("Chargement de la musique…");
+      }
     }
   }
 
