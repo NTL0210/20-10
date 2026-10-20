@@ -11,19 +11,9 @@
   const prefersReduced = () => reduceQuery.matches;
   const wait = (ms) => new Promise((resolve) => setTimeout(resolve, prefersReduced() ? 0 : ms));
 
-  /* --- Deterministic geometry ------------------------------------------- */
-  // The rose is grown as a phyllotactic spiral; rings only tint the petals
-  // and define how far the opening sequence has travelled outwards.
-  const RINGS = [
-    { count: 3,  palette: ["#4d1625", "#571a2a", "#622031"] },
-    { count: 6,  palette: ["#571a2a", "#622031", "#6d2738"] },
-    { count: 9,  palette: ["#5f1e2d", "#6b2536", "#762c3d"] },
-    { count: 12, palette: ["#682536", "#742d3e", "#803545"] },
-    { count: 15, palette: ["#712c3c", "#7d3445", "#893d4e"] },
-    { count: 18, palette: ["#7b3343", "#873e4e", "#934959"] },
-    { count: 19, palette: ["#873d4e", "#934b5b", "#9f5868"] },
-    { count: 19, palette: ["#934b5a", "#a05a69", "#ac6978"] }
-  ];
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const clamp = (x, min, max) => Math.min(max, Math.max(min, x));
+  const randBetween = (rand, range) => range[0] + (range[1] - range[0]) * rand();
 
   function mulberry32(seed) {
     let a = seed >>> 0;
@@ -35,21 +25,9 @@
     };
   }
 
-  // Nudge a petal's colour towards white (amount > 0) or black (amount < 0).
-  function shadeHex(hex, amount) {
-    const n = parseInt(hex.slice(1), 16);
-    const r = (n >> 16) & 255;
-    const g = (n >> 8) & 255;
-    const b = n & 255;
-    const target = amount >= 0 ? 255 : 0;
-    const k = Math.min(1, Math.abs(amount));
-    const mix = (c) => Math.round(c + (target - c) * k);
-    return `rgb(${mix(r)} ${mix(g)} ${mix(b)})`;
-  }
-
-  // Catmull-Rom through a closed loop of points, emitted as smooth cubic
-  // Bézier segments. Every join keeps a continuous tangent, so the petal
-  // outline has no angular corners anywhere.
+  // Catmull-Rom through a closed loop, emitted as smooth cubic Bézier
+  // segments. The outline is sampled rather than described with a handful of
+  // rigid arcs, so every petal can have its own shoulder, notch and ripple.
   function smoothClosedPath(points, tension) {
     const k = (tension === undefined ? 0.9 : tension) / 6;
     const n = points.length;
@@ -72,301 +50,349 @@
     return out.join(" ");
   }
 
-  // A single rose petal. Unlike a daisy ray, a rose petal never narrows to a
-  // point: it rises from a narrow claw, flares into broad shoulders and closes
-  // in a domed, faintly notched, softly waved rim. The rim flares just beyond
-  // each shoulder and carries two slow undulations rather than a row of small
-  // ripples, so the silhouette reads as a broad, soft petal edge. The spine is
-  // *curved* and every petal sweeps the same way, so the head wraps into one
-  // spiral instead of radiating like a daisy. `curl` < 0 tucks the rim inwards
-  // (the tight folded centre); `curl` > 0 lets it fall open.
-  function petalOutline(len, half, rand, t, curl, bend) {
-    const lean = (rand() - 0.5) * 0.1;
-    const asym = (rand() - 0.5) * lerp(0.34, 0.16, t);
-    const rimShift = (rand() - 0.5) * half * lerp(0.16, 0.06, t);
-    const ruffleAmp = lerp(0.04, 0.08, t) * (0.7 + rand() * 0.5);
-    const ruffleFreq = 1.6 + rand() * 0.7;
-    const rippleAmp = 0.004 + rand() * 0.012;
-    const rippleFreq = 4.2 + rand() * 1.8;
+  // Botanical drawing rather than a radial daisy. A garden-rose petal has a
+  // narrow, cupped claw, broad shoulders and a soft, undulating rim. The rim
+  // sits well above the shoulders, can carry a shallow central notch, and the
+  // whole outline is allowed to lean and to be slightly lopsided. `depth` runs
+  // from 0 at the folded heart to 1 at the broad guard petals.
+  function petalOutline(len, half, rand, depth) {
+    const asym = (rand() - 0.5) * (0.16 + depth * 0.08);
+    const tipShift = (rand() - 0.5) * half * (0.12 + depth * 0.12);
+    const shoulder = 0.82 + (rand() - 0.5) * 0.035;
+    const rimLift = 0.79 + (rand() - 0.5) * 0.045;
+    const waveA = (0.012 + depth * 0.032) * (0.72 + rand() * 0.55);
+    const waveB = (0.004 + depth * 0.012) * (0.72 + rand() * 0.6);
     const phase = rand() * Math.PI * 2;
-    const claw = lerp(0.3, 0.42, t) + (rand() - 0.5) * 0.08;
-    const shoulder = lerp(0.5, 0.56, t) + (rand() - 0.5) * 0.09;
-    const notch = lerp(0.04, 0.06, t) + rand() * 0.018;
-    const p = lerp(0.55, 0.78, t) + (rand() - 0.5) * 0.18;
-    const flare = half * (0.02 + 0.02 * t) * (0.7 + rand() * 0.8);
+    const notch = (0.009 + depth * 0.026) * (0.20 + rand() * 1.20);
+    const rimTilt = (rand() - 0.5) * (0.015 + depth * 0.035);
+    const baseShare = 0.055 + Math.pow(1 - depth, 2) * 0.30;
+    const sideSteps = 8;
+    const rimSteps = 18;
+    const points = [];
 
-    const sweep = bend * half;
-    const spineX = (u) => sweep * u * u + lean * half * u;
-    const spineY = (u) => -len * u;
-    const tanX = (u) => 2 * sweep * u + lean * half;
-
-    const frame = (u) => {
-      const tx = tanX(u);
-      const tl = Math.hypot(tx, -len);
-      return { cx: spineX(u), cy: spineY(u), nx: len / tl, ny: tx / tl, ox: tx / tl, oy: -len / tl };
-    };
-
-    const pts = [[0, 0]];
-    const steps = 12;
-    const side = (u) => half * (claw + (1 - claw) * Math.sin(Math.PI * 0.5 * Math.pow(u / shoulder, p)));
-
-    for (let i = 1; i <= steps; i += 1) {
-      const u = (shoulder * i) / steps;
-      const w = side(u);
-      const f = frame(u);
-      pts.push([f.cx - w * f.nx, f.cy - w * f.ny]);
+    // Left side, from the base to the shoulder. The folded heart gets a
+    // broader claw so the tiny inner petals overlap instead of leaving a
+    // star-shaped hole at the exact centre.
+    for (let i = 0; i <= sideSteps; i += 1) {
+      const t = i / sideSteps;
+      const u = t * shoulder;
+      const width = half * (baseShare + (1 - baseShare) * Math.pow(t, 0.72));
+      const bulge = 1 + 0.10 * Math.sin(Math.PI * t);
+      const irregular = half * 0.014 * Math.sin((5.5 * t + phase) * Math.PI);
+      const x = -(width * bulge + irregular * t) * (1 - asym * 0.55 * Math.sin(Math.PI * t)) + tipShift * t * t;
+      points.push([x, -len * u]);
     }
 
-    const f = frame(shoulder);
-    // Reflexed outer petals flatten their dome; the incurved centre keeps a
-    // taller, more hooded rim.
-    const domeH = (1 - shoulder) * len * 1.55 * (1 - 0.14 * curl) * (0.9 + rand() * 0.2);
-    const rimSteps = 14;
+    // The rim: one broad, softly domed lobe from shoulder to shoulder. The
+    // two long, slow waves are deliberate; many small ripples would read as
+    // cut paper. A shallow notch keeps the top edge from looking stamped.
     for (let i = 1; i < rimSteps; i += 1) {
-      const a = (Math.PI * i) / rimSteps;
-      const wave = 1
-        + ruffleAmp * Math.sin(ruffleFreq * a * 2 + phase)
-        + rippleAmp * Math.sin(rippleFreq * a + phase * 1.7);
-      const halfEff = half * (1 + asym * (1 - Math.cos(a))) * wave;
-      const lat = -halfEff * Math.cos(a) - flare * Math.sin(a) * Math.cos(a) + rimShift * Math.sin(a);
-      const out = domeH * Math.sin(a) * (1 - notch * Math.sin(a))
-        * (1 + ruffleAmp * 0.5 * Math.sin(ruffleFreq * a * 2 + phase + 1.1));
-      pts.push([f.cx + f.nx * lat + f.ox * out, f.cy + f.ny * lat + f.oy * out]);
+      const s = i / rimSteps;
+      const a = Math.PI * (1 - s);
+      const sine = Math.sin(a);
+      const x = tipShift + half * Math.cos(a)
+        + half * 0.030 * Math.sin(4.4 * a + phase) * sine;
+      const dome = rimLift + (1 - rimLift) * Math.pow(sine, 0.58);
+      const wave = len * (waveA * Math.sin(3.1 * a + phase)
+        + waveB * Math.sin(6.7 * a + phase * 1.6)) * Math.pow(sine, 1.3);
+      const dip = len * notch * Math.exp(-Math.pow((a - Math.PI / 2) / 0.36, 2));
+      const tiltY = len * rimTilt * Math.cos(a);
+      const y = -len * dome + wave + dip + tiltY;
+      points.push([x, y]);
     }
 
-    for (let i = steps; i >= 1; i -= 1) {
-      const u = (shoulder * i) / steps;
-      const w = side(u) * (1 + asym);
-      const f2 = frame(u);
-      pts.push([f2.cx + w * f2.nx, f2.cy + w * f2.ny]);
+    // Right side, returning to the base. The opposite asymmetry and a
+    // different swell keep the two halves from being mirror images.
+    for (let i = sideSteps; i >= 0; i -= 1) {
+      const t = i / sideSteps;
+      const u = t * shoulder;
+      const width = half * (baseShare + (1 - baseShare) * Math.pow(t, 0.72));
+      const bulge = 1 + 0.10 * Math.sin(Math.PI * t);
+      const irregular = half * 0.014 * Math.sin((5.5 * t - phase) * Math.PI);
+      const x = (width * bulge + irregular * t) * (1 + asym * 0.55 * Math.sin(Math.PI * t)) + tipShift * t * t;
+      points.push([x, -len * u]);
     }
 
-    return smoothClosedPath(pts, 0.9);
+    return smoothClosedPath(points, 0.9);
   }
 
-  function veinPath(len, half, rand) {
-    const bend = (rand() - 0.5) * half * 0.3;
-    const top = -len * (0.58 + rand() * 0.16);
-    const mid = -len * (0.28 + rand() * 0.1);
+  function veinPath(len, half, rand, depth) {
+    const lean = (rand() - 0.5) * half * 0.16;
+    const top = -len * (0.58 + rand() * 0.17);
+    const mid = -len * (0.26 + rand() * 0.12);
     return (
-      `M 0 ${(-len * 0.1).toFixed(2)} ` +
-      `C ${(half * 0.05).toFixed(2)} ${(-len * 0.2).toFixed(2)} ` +
-      `${(bend * 0.4).toFixed(2)} ${(mid).toFixed(2)} ${(bend * 0.85).toFixed(2)} ${(top * 0.92).toFixed(2)} ` +
-      `S ${(bend * 1.05).toFixed(2)} ${(top * 0.99).toFixed(2)} ${(bend).toFixed(2)} ${(top).toFixed(2)}`
+      `M ${(lean * 0.1).toFixed(2)} ${(-len * 0.08).toFixed(2)} ` +
+      `C ${(half * 0.05 + lean * 0.2).toFixed(2)} ${(-len * 0.20).toFixed(2)} ` +
+      `${(lean * 0.5).toFixed(2)} ${mid.toFixed(2)} ${(lean * 0.8).toFixed(2)} ${top.toFixed(2)} ` +
+      `S ${(lean * 1.05).toFixed(2)} ${(top * 0.99).toFixed(2)} ${(lean * 1.1).toFixed(2)} ${(top * 0.90).toFixed(2)}`
     );
   }
 
-  // A secondary vein, set off the spine. One fine line per petal is enough to
-  // suggest the grain of the surface without turning the flower into a
-  // drawing.
-  function sideVein(len, half, rand, dir) {
-    const root = dir * half * (0.12 + rand() * 0.1);
-    const mid = dir * half * (0.34 + rand() * 0.16);
-    const tip = dir * half * (0.5 + rand() * 0.14);
+  function sideVeinPath(len, half, rand, dir, depth) {
+    const root = dir * half * (0.10 + rand() * 0.08);
+    const mid = dir * half * (0.28 + rand() * 0.15);
+    const tip = dir * half * (0.40 + rand() * 0.16);
     return (
-      `M ${(root * 0.4).toFixed(2)} ${(-len * 0.18).toFixed(2)} ` +
-      `C ${root.toFixed(2)} ${(-len * 0.32).toFixed(2)} ` +
-      `${(mid * 0.9).toFixed(2)} ${(-len * 0.48).toFixed(2)} ` +
-      `${tip.toFixed(2)} ${(-len * 0.64).toFixed(2)}`
+      `M ${(root * 0.35).toFixed(2)} ${(-len * 0.16).toFixed(2)} ` +
+      `C ${root.toFixed(2)} ${(-len * (0.28 + depth * 0.03)).toFixed(2)} ` +
+      `${(mid * 0.9).toFixed(2)} ${(-len * 0.45).toFixed(2)} ` +
+      `${tip.toFixed(2)} ${(-len * (0.58 + depth * 0.04)).toFixed(2)}`
     );
   }
 
   function creasePath(len, half, rand) {
     const side = rand() > 0.5 ? 1 : -1;
-    const spread = half * (0.15 + rand() * 0.12) * side;
+    const spread = half * (0.12 + rand() * 0.13) * side;
     return (
-      `M ${(spread * 0.25).toFixed(2)} ${(-len * 0.06).toFixed(2)} ` +
-      `C ${spread.toFixed(2)} ${(-len * 0.32).toFixed(2)} ` +
-      `${(spread * 0.8).toFixed(2)} ${(-len * 0.58).toFixed(2)} ` +
-      `${(spread * 0.35).toFixed(2)} ${(-len * 0.78).toFixed(2)}`
+      `M ${(spread * 0.2).toFixed(2)} ${(-len * 0.05).toFixed(2)} ` +
+      `C ${spread.toFixed(2)} ${(-len * 0.28).toFixed(2)} ` +
+      `${(spread * 0.85).toFixed(2)} ${(-len * 0.55).toFixed(2)} ` +
+      `${(spread * 0.30).toFixed(2)} ${(-len * 0.76).toFixed(2)}`
     );
   }
 
+  // HSL keeps the red clear instead of letting white/black mixing turn the
+  // flower mauve. The heart is nearly burgundy; the guard petals open into a
+  // saturated garden-rose crimson, with a little extra warmth on the side
+  // that faces the upper-left light.
+  function petalColour(depth, angle, rand) {
+    const lightRel = Math.cos(((angle - 315) * Math.PI) / 180);
+    const hue = 351 + (rand() - 0.5) * 7 + depth * 2.5;
+    const sat = 62 + depth * 10 + (rand() - 0.5) * 5;
+    const lightness = 17.5 + depth * 19 + (1 - depth) * 1.5 + lightRel * 4.2 + (rand() - 0.5) * 2.5;
+    return { h: hue, s: sat, l: clamp(lightness, 11, 43) };
+  }
+
+  const hsl = (c, dl) => `hsl(${c.h.toFixed(1)} ${clamp(c.s, 0, 100).toFixed(1)}% ${clamp(c.l + dl, 0, 100).toFixed(1)}%)`;
+
   const petalsGroup = document.getElementById("petals");
-  // One reusable outline per petal lives in <defs>; the shading layers are
-  // <use> references, so the (long) organic path data is stored only once.
+  const flowerClipEl = document.getElementById("flowerClip");
   const petalDefs = document.createElementNS(SVG_NS, "defs");
   petalDefs.setAttribute("id", "petalDefs");
   petalsGroup.parentNode.insertBefore(petalDefs, petalsGroup);
-  const petals = [];        // opening sequence order, centre outward
-  const cumulative = [];
-  RINGS.reduce((sum, conf) => {
-    const next = sum + conf.count;
-    cumulative.push(next);
-    return next;
-  }, 0);
 
-  function stageFor(index) {
-    for (let i = 0; i < cumulative.length; i += 1) {
-      if (index < cumulative[i]) return i;
+  // Eight shallow whorls rather than one mechanically even grid. Their counts
+  // are deliberately uneven, and each petal is jittered inside its own whorl.
+  const ROSE_LAYERS = [
+    { count: 3,  angle: 12, baseR: [0, 2],    len: [25, 45],  half: [14, 24],  tilt: [55, 100], sy: [0.36, 0.55], jitter: 0.95 },
+    { count: 5,  angle: 44, baseR: [2, 8],    len: [35, 65],  half: [18, 32],  tilt: [45, 85],  sy: [0.40, 0.60], jitter: 0.72 },
+    { count: 7,  angle: 20, baseR: [5, 15],   len: [50, 85],  half: [24, 42],  tilt: [35, 72],  sy: [0.46, 0.66], jitter: 0.58 },
+    { count: 10, angle: 66, baseR: [12, 24],  len: [70, 105], half: [32, 52],  tilt: [26, 58],  sy: [0.52, 0.72], jitter: 0.44 },
+    { count: 13, angle: 31, baseR: [20, 34],  len: [95, 130], half: [42, 64],  tilt: [14, 40], sy: [0.58, 0.76], jitter: 0.34 },
+    { count: 16, angle: 8,   baseR: [24, 42],  len: [112, 158], half: [52, 78],  tilt: [6, 30],  sy: [0.64, 0.82], jitter: 0.26 },
+    { count: 18, angle: 54,  baseR: [28, 50],  len: [135, 200], half: [68, 108], tilt: [-6, 24], sy: [0.70, 0.88], jitter: 0.24 },
+    { count: 16, angle: 27,  baseR: [34, 56],  len: [168, 235], half: [88, 140], tilt: [-14, 18], sy: [0.78, 0.94], jitter: 0.28 },
+    { count: 13, angle: 72,  baseR: [40, 62],  len: [205, 280], half: [112, 172], tilt: [-20, 16], sy: [0.84, 1.02], jitter: 0.26 }
+  ];
+
+  const petals = [];        // opening sequence order, heart outward
+  const defRecords = new Map();
+
+  function shuffle(records, rand) {
+    for (let i = records.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(rand() * (i + 1));
+      const temp = records[i];
+      records[i] = records[j];
+      records[j] = temp;
     }
-    return RINGS.length - 1;
   }
 
-  const lerp = (a, b, t) => a + (b - a) * t;
-  const smoothstep = (a, b, x) => {
-    const u = Math.min(1, Math.max(0, (x - a) / (b - a)));
-    return u * u * (3 - 2 * u);
-  };
+  ROSE_LAYERS.forEach((layer, layerIndex) => {
+    const depth = layerIndex / (ROSE_LAYERS.length - 1);
+    const layerRecords = [];
+    const layerRand = mulberry32(4103 + layerIndex * 7919);
+    const step = 360 / layer.count;
 
-  // Angular placement. The folded centre is laid down with a short, steady
-  // step so those petals chain into one visible spiral roll; further out the
-  // step opens onto the golden angle, which packs the broad petals evenly.
-  const angles = [];
-  let acc = 8;
-  for (let i = 0; i < TOTAL_PETALS; i += 1) {
-    acc += i < 10 ? 20.5 : 137.508;
-    angles.push(acc);
-  }
+    for (let i = 0; i < layer.count; i += 1) {
+      const rand = mulberry32(101 + i * 37 + layerIndex * 104729);
+      // Golden-angle placement keeps the petals from stacking into obvious
+      // concentric rings. Consecutive petals in a whorl no longer sit at a
+      // constant angular step, which is what made the old flower read as a
+      // geometric rosette rather than a grown one.
+      const angle = layer.angle
+        + i * 137.508
+        + (rand() - 0.5) * (8 + layer.jitter * 16)
+        + 3.5 * Math.sin(layerIndex * 1.37 + i * 2.11);
+      const silhouette = 1
+        + 0.090 * Math.cos((angle - 18) * Math.PI / 180)
+        + 0.028 * Math.sin(angle * Math.PI / 180 * 3 + 0.7);
+      const len = randBetween(rand, layer.len) * silhouette * (0.90 + rand() * 0.20);
+      const half = randBetween(rand, layer.half) * (0.82 + rand() * 0.34);
+      const baseR = randBetween(rand, layer.baseR) + (rand() - 0.5) * (6 + depth * 14);
+      const tiltOpen = randBetween(rand, layer.tilt) + 3.5 * Math.sin(angle * Math.PI / 180 * 2 + layerIndex);
+      const tiltClosed = clamp(tiltOpen * 0.40 + 6 + (rand() - 0.5) * 3, -15, 60);
+      const openSX = 0.96 + rand() * 0.08;
+      const openSY = randBetween(rand, layer.sy);
+      const closedSX = 0.58 + rand() * 0.10;
+      const closedSY = 0.46 + depth * 0.08 + rand() * 0.07;
+      const duration = Math.round(700 + depth * 100 + rand() * 90);
 
-  for (let index = 0; index < TOTAL_PETALS; index += 1) {
-    const t = index / (TOTAL_PETALS - 1);
-    const ring = stageFor(index);
-    const conf = RINGS[ring];
-    const rand = mulberry32(101 + index * 7919);
-    // The centre is deliberately crumpled: stronger jitter in angle, radius
-    // and lean near the middle keeps the inner petals from nesting into a
-    // neat rosette, which would read as a camellia.
-    const crumple = (1 - t) * (1 - t);
-    const angle = angles[index] + (rand() - 0.5) * (6 + t * 22 + 58 * crumple) + 4 * Math.sin(index * 0.9);
-    // Inner petals are wrapped around the bud and unfold outwards; outer
-    // petals are already open. Interpolating this angle is what makes the
-    // opening read as an unfolding rather than a flat scale-up.
-    const tiltOpen = lerp(124, 70, Math.pow(t, 0.92)) + (rand() - 0.5) * (12 + 34 * crumple);
-    const tiltClosed = lerp(136, 98, Math.pow(t, 0.8)) + (rand() - 0.5) * 12;
-    // Every petal is attached at the receptacle, so the inner (short) petals
-    // sit on top and hide the long outer petals' bases — the way a rose is
-    // actually built. Only the outer part of each long petal is ever seen.
-    const baseOpen = 4 + 38 * Math.pow(t, 1.15) + (rand() - 0.5) * (4 + t * 22 + 46 * crumple);
-    const baseClosed = 1.5 + 14 * Math.pow(t, 1.15) + (rand() - 0.5) * 2;
-    // A cabbage rose is a dense folded centre wrapped in many broad petals.
-    // The size gradient is strong but spread across the outer third, so the
-    // silhouette is made of overlapping lobes rather than a handful of flat
-    // plates.
-    const outer = smoothstep(0.72, 1, t);
-    const innerBoost = 1 + 0.28 * Math.pow(1 - t, 3);
-    const len = (44 + 80 * Math.pow(t, 0.82)) * (1 + 1.05 * outer) * innerBoost * (0.78 + rand() * (0.36 + t * 0.12));
-    const half = len * lerp(0.48, 0.78, Math.pow(t, 0.55)) * (0.85 + rand() * 0.3);
-    const bend = lerp(1.8, 0.45, t) * (0.8 + rand() * 0.4);
-    const curl = lerp(-0.75, 0.75, t) + (rand() - 0.5) * 0.26;
-    // Inner petals stand up inside the cup, so they stay foreshortened even
-    // when the flower is open; outer petals lie flat and reach full size.
-    const openSX = lerp(0.8, 1, t) + (rand() - 0.5) * 0.03;
-    const openSY = lerp(0.78, 1, t) + (rand() - 0.5) * 0.03;
-    const closedSX = lerp(0.58, 0.48, t) + (rand() - 0.5) * 0.035;
-    const closedSY = lerp(0.62, 0.5, t) + (rand() - 0.5) * 0.035;
-    const twistClosed = -(18 + t * 30) + (rand() - 0.5) * 7;
-    const twistOpen = index < 14
-      ? 8 + index * 1.6 + (rand() - 0.5) * 5
-      : index < 30
-        ? 4 + (rand() - 0.5) * 5
-        : (rand() - 0.5) * 6;
-    // Larger outer petals travel farther, so they take slightly longer. The
-    // timing follows the petal's position, never a random per-petal dice roll.
-    const duration = Math.round(470 + t * 250);
-    const d = petalOutline(len, half, rand, t, curl, bend);
-    const v = veinPath(len, half, rand);
-    const vs = sideVein(len, half, rand, rand() > 0.5 ? 1 : -1);
-    const c = creasePath(len, half, rand);
-    // A warm/cool shift per petal keeps the head from looking machined. The
-    // light comes from the upper left, so petals on that side of the head are
-    // lifted and those opposite fall into a slightly deeper wash.
-    const baseColor = conf.palette[index % conf.palette.length];
-    const lightRel = Math.cos(((angle - 225) * Math.PI) / 180);
-    const color = shadeHex(baseColor, lightRel * 0.13 + (rand() - 0.5) * 0.16);
-    const shapeId = `petalShape${index}`;
-    // Light comes from the upper left; cast shadows therefore fall down and
-    // to the right, onto the petal beneath. A soft, low-contrast shadow reads
-    // as depth instead of a cut-paper edge.
-    const shadowX = 1 + rand() * 1.8;
-    const shadowY = 1.4 + rand() * 2.4;
-    const shadowOpacity = (0.03 + rand() * 0.04).toFixed(3);
-    const creaseMarkup = ring < 5
-      ? `<path class="petal__crease" d="${c}" fill="none" stroke="rgba(48,12,22,.028)" stroke-width="1.1" stroke-linecap="round"/>`
-      : "";
+      const shapeId = `petalShape${petals.length}`;
+      const bodyId = `petalBody${petals.length}`;
+      const colour = petalColour(depth, angle, rand);
+      const shape = petalOutline(len, half, rand, depth);
+      const crease = creasePath(len, half, rand);
+      const vein = veinPath(len, half, rand, depth);
+      const sideVein = sideVeinPath(len, half, rand, rand() > 0.5 ? 1 : -1, depth);
 
-    const shape = document.createElementNS(SVG_NS, "path");
-    shape.setAttribute("id", shapeId);
-    shape.setAttribute("d", d);
-    petalDefs.appendChild(shape);
+      const shapeEl = document.createElementNS(SVG_NS, "path");
+      shapeEl.setAttribute("id", shapeId);
+      shapeEl.setAttribute("d", shape);
+      petalDefs.appendChild(shapeEl);
 
-    const el = document.createElementNS(SVG_NS, "g");
-    el.setAttribute("class", "petal");
-    el.setAttribute("data-ring", String(ring));
-    el.setAttribute("data-order", String(index));
-    el.setAttribute("data-petal", "");
-    el.setAttribute("data-state", "closed");
-    el.innerHTML = `
-      <g class="petal__slide" transform="translate(0 ${(-baseClosed).toFixed(2)}) rotate(${tiltClosed.toFixed(2)})">
-        <g class="petal__fold" transform="scale(${closedSX.toFixed(3)} ${closedSY.toFixed(3)}) rotate(${twistClosed.toFixed(2)})">
-          <use class="petal__shadow" href="#${shapeId}" transform="translate(${shadowX} ${shadowY})" fill="#1c050c" opacity="${shadowOpacity}" filter="url(#petalSoft)"/>
-          <use class="petal__blade" href="#${shapeId}" fill="${color}"/>
-          <use class="petal__volume" href="#${shapeId}" fill="url(#petalVolume)"/>
-          <use class="petal__side" href="#${shapeId}" fill="url(#petalSide)"/>
-          <use class="petal__sheen" href="#${shapeId}" fill="url(#petalSheen)"/>
-          <use class="petal__cup" href="#${shapeId}" fill="url(#petalCup)"/>
-          <use class="petal__base" href="#${shapeId}" fill="url(#petalBase)"/>
-          <use class="petal__curl" href="#${shapeId}" fill="url(#petalCurl)"/>
-          <use class="petal__rim" href="#${shapeId}" fill="none" stroke="url(#petalRim)" stroke-width="${ring > 4 ? 0.45 : 0.35}" stroke-linejoin="round"/>
-          <use class="petal__edge" href="#${shapeId}" fill="none" stroke="#3a0d1a" stroke-opacity="${ring < 5 ? 0.18 : 0.09}" stroke-width="${ring < 5 ? 0.65 : 0.5}" stroke-linejoin="round"/>
-          <path class="petal__vein" d="${v}" fill="none" stroke="${ring > 4 ? "rgba(50,12,24,.1)" : "rgba(255,240,228,.09)"}" stroke-width="1" stroke-linecap="round"/>
-          ${ring > 3 ? `<path class="petal__vein petal__vein--side" d="${vs}" fill="none" stroke="rgba(50,12,24,.05)" stroke-width=".9" stroke-linecap="round"/>` : ""}
-          ${creaseMarkup}
-        </g>
-      </g>`;
-    const orientation = document.createElementNS(SVG_NS, "g");
-    orientation.setAttribute("class", "petal__orientation");
-    orientation.setAttribute("transform", `rotate(${angle.toFixed(3)})`);
-    orientation.appendChild(el);
+      // A clip path lets the blurred edge stroke fall only inside the petal,
+      // which produces a soft, rounded inner shadow instead of a flat plate.
+      const clipId = `petalClip${petals.length}`;
+      const clipEl = document.createElementNS(SVG_NS, "clipPath");
+      clipEl.setAttribute("id", clipId);
+      clipEl.setAttribute("clipPathUnits", "userSpaceOnUse");
+      const clipUse = document.createElementNS(SVG_NS, "use");
+      clipUse.setAttribute("href", `#${shapeId}`);
+      clipEl.appendChild(clipUse);
+      petalDefs.appendChild(clipEl);
 
-    petals.push({
-      el,
-      orientation,
-      slide: el.querySelector(".petal__slide"),
-      fold: el.querySelector(".petal__fold"),
-      closedR: baseClosed,
-      openR: baseOpen,
-      closedSX,
-      closedSY,
-      openSX,
-      openSY,
-      twistClosed,
-      twistOpen,
-      tiltClosed,
-      tiltOpen,
-      status: "closed",
-      duration
-    });
-  }
+      // Shade the petal across the same upper-left light that falls over the
+      // whole bloom. The gradient vector is rotated into the petal's own
+      // frame, so a guard petal on the right is lit on its upper side rather
+      // than carrying an identical left-to-right sheen.
+      const lightAngle = ((angle + tiltOpen * 0.22) * Math.PI) / 180;
+      const lightX = -0.7071;
+      const lightY = -0.7071;
+      const localX = lightX * Math.cos(lightAngle) + lightY * Math.sin(lightAngle);
+      const localY = -lightX * Math.sin(lightAngle) + lightY * Math.cos(lightAngle);
+      const gradient = document.createElementNS(SVG_NS, "linearGradient");
+      gradient.setAttribute("id", bodyId);
+      gradient.setAttribute("x1", (0.5 + localX * 0.5).toFixed(4));
+      gradient.setAttribute("y1", (0.5 + localY * 0.5).toFixed(4));
+      gradient.setAttribute("x2", (0.5 - localX * 0.5).toFixed(4));
+      gradient.setAttribute("y2", (0.5 - localY * 0.5).toFixed(4));
+      const stops = [
+        [0, hsl(colour, 9)],
+        [0.38, hsl(colour, 3.5)],
+        [0.72, hsl(colour, -2)],
+        [1, hsl(colour, -7)]
+      ];
+      stops.forEach(([offset, colourValue]) => {
+        const stop = document.createElementNS(SVG_NS, "stop");
+        stop.setAttribute("offset", String(offset));
+        stop.setAttribute("stop-color", colourValue);
+        gradient.appendChild(stop);
+      });
+      petalDefs.appendChild(gradient);
 
-  // Draw the outermost petals first; the spiral centre sits on top.
-  for (let index = petals.length - 1; index >= 0; index -= 1) {
-    petalsGroup.appendChild(petals[index].orientation);
+      const el = document.createElementNS(SVG_NS, "g");
+      el.setAttribute("class", "petal");
+      el.setAttribute("data-petal", "");
+      el.setAttribute("data-ring", String(layerIndex));
+      el.setAttribute("data-order", String(petals.length));
+      el.setAttribute("data-state", "closed");
+      el.innerHTML = `
+        <g class="petal__slide">
+          <g class="petal__fold">
+            <use class="petal__shadow" href="#${shapeId}" transform="translate(${(3 + depth * 4).toFixed(2)} ${(4 + depth * 6).toFixed(2)})" fill="#170208" opacity="${(0.055 + depth * 0.045).toFixed(3)}" filter="url(#petalSoft)"/>
+            <use class="petal__blade" href="#${shapeId}" fill="url(#${bodyId})"/>
+            <use class="petal__shade" href="#${shapeId}" fill="url(#petalShade)"/>
+            <g class="petal__inner" clip-path="url(#${clipId})">
+              <use href="#${shapeId}" fill="none" stroke="url(#petalInnerShade)" stroke-width="${(5 + depth * 7).toFixed(2)}" filter="url(#petalInnerSoft)"/>
+              <use href="#${shapeId}" fill="none" stroke="url(#petalInnerLight)" stroke-width="${(5 + depth * 7).toFixed(2)}" filter="url(#petalInnerSoft)"/>
+            </g>
+            <use class="petal__rim" href="#${shapeId}" fill="none" stroke="url(#petalRim)" stroke-width=".5" stroke-linejoin="round"/>
+            <use class="petal__edge-light" href="#${shapeId}" fill="none" stroke="url(#petalEdgeLight)" stroke-width="${(0.6 + depth * 0.8).toFixed(2)}" stroke-linejoin="round"/>
+            <path class="petal__crease" d="${crease}" fill="none" stroke="rgba(23,2,8,.085)" stroke-width="${(0.8 + depth * 0.35).toFixed(2)}" stroke-linecap="round"/>
+            <path class="petal__vein" d="${vein}" fill="none" stroke="rgba(255,194,168,.045)" stroke-width=".7" stroke-linecap="round"/>
+            ${depth > 0.26 ? `<path class="petal__vein petal__vein--side" d="${sideVein}" fill="none" stroke="rgba(24,2,9,.035)" stroke-width=".65" stroke-linecap="round"/>` : ""}
+          </g>
+        </g>`;
+      const orientation = document.createElementNS(SVG_NS, "g");
+      orientation.setAttribute("class", "petal__orientation");
+      orientation.setAttribute("transform", `rotate(${angle.toFixed(3)})`);
+      orientation.appendChild(el);
+
+      const record = {
+        el,
+        orientation,
+        angle,
+        shapeId,
+        slide: el.querySelector(".petal__slide"),
+        fold: el.querySelector(".petal__fold"),
+        baseR,
+        openR: baseR,
+        closedR: Math.max(0, baseR - 1.5),
+        openSX,
+        openSY,
+        closedSX,
+        closedSY,
+        tiltOpen,
+        tiltClosed,
+        twistClosed: -(12 + depth * 20) + (rand() - 0.5) * 6,
+        twistOpen: (rand() - 0.5) * (depth > 0.5 ? 8 : 15),
+        status: "closed",
+        duration
+      };
+      applyPetalState(record, 1);
+      el.style.opacity = "0";
+      layerRecords.push(record);
+      defRecords.set(el, record);
+    }
+
+    // Open around each whorl in a continuous clockwise sweep, starting at a
+    // different notch in every layer. Consecutive petals overlap into a
+    // rolled bud; a random shuffle can produce a four-pointed star instead.
+    layerRecords.sort((a, b) => a.angle - b.angle);
+    const start = Math.floor(layerRand() * layerRecords.length);
+    petals.push(...layerRecords.slice(start), ...layerRecords.slice(0, start));
+  });
+
+  // Outer petals are drawn first and the folded heart sits on top, as in a
+  // real bloom. Within one whorl the shuffled order is kept, so the overlap
+  // does not read as a tidy card fan.
+  for (let layerIndex = ROSE_LAYERS.length - 1; layerIndex >= 0; layerIndex -= 1) {
+    const layer = petals.filter((record) => Number(record.el.getAttribute("data-ring")) === layerIndex);
+    layer.forEach((record) => petalsGroup.appendChild(record.orientation));
   }
 
   function applyPetalState(record, progress) {
-    const r = record.closedR + (record.openR - record.closedR) * progress;
-    const sx = record.closedSX + (record.openSX - record.closedSX) * progress;
-    const sy = record.closedSY + (record.openSY - record.closedSY) * progress;
-    const rotation = record.twistClosed + (record.twistOpen - record.twistClosed) * progress;
-    const tilt = record.tiltClosed + (record.tiltOpen - record.tiltClosed) * progress;
+    const p = clamp(progress, 0, 1);
+    const r = lerp(record.closedR, record.openR, p);
+    const sx = lerp(record.closedSX, record.openSX, p);
+    const sy = lerp(record.closedSY, record.openSY, p);
+    const rotation = lerp(record.twistClosed, record.twistOpen, p);
+    const tilt = lerp(record.tiltClosed, record.tiltOpen, p);
     record.slide.setAttribute("transform", `translate(0 ${(-r).toFixed(2)}) rotate(${tilt.toFixed(2)})`);
     record.fold.setAttribute("transform", `scale(${sx.toFixed(4)} ${sy.toFixed(4)}) rotate(${rotation.toFixed(2)})`);
   }
 
+  // The directional relief is clipped to the petals that have actually
+  // opened. A single global wash then reads as one light falling across the
+  // bloom, instead of an identical highlight painted onto every petal.
+  function mountPetalInClip(record) {
+    if (!flowerClipEl) return;
+    const shape = document.createElementNS(SVG_NS, "g");
+    shape.setAttribute(
+      "transform",
+      `rotate(${record.angle.toFixed(3)}) translate(0 ${(-record.openR).toFixed(2)}) ` +
+      `rotate(${record.tiltOpen.toFixed(2)}) scale(${record.openSX.toFixed(4)} ${record.openSY.toFixed(4)}) ` +
+      `rotate(${record.twistOpen.toFixed(2)})`
+    );
+    const use = document.createElementNS(SVG_NS, "use");
+    use.setAttribute("href", `#${record.shapeId}`);
+    shape.appendChild(use);
+    flowerClipEl.appendChild(shape);
+  }
+
   function animatePetal(record) {
-    // Reduced motion still shows a short, simple unfold rather than disabling
-    // the experience. The automatic cadence remains one petal per second.
+    // A restrained unfold: the petal grows just enough to suggest furling,
+    // while its own tilt and rotation do the visible work. Reduced motion
+    // keeps the state change but settles it almost immediately.
     const reducedAtStart = prefersReduced();
-    const duration = reducedAtStart ? 120 : record.duration;
+    const duration = reducedAtStart ? 110 : record.duration;
 
     return new Promise((resolve) => {
       const start = performance.now();
       const frame = (now) => {
-        // If the reader turns on reduced motion mid-unfold, settle the petal
-        // immediately instead of finishing the long tween.
         if (!reducedAtStart && prefersReduced()) {
           applyPetalState(record, 1);
+          record.el.style.opacity = "1";
           resolve();
           return;
         }
@@ -377,6 +403,7 @@
             ? 4 * t * t * t
             : 1 - Math.pow(-2 * t + 2, 3) / 2;
         applyPetalState(record, eased);
+        record.el.style.opacity = String(Math.min(1, 0.12 + eased * 1.35));
         if (t < 1) requestAnimationFrame(frame);
         else resolve();
       };
@@ -388,6 +415,8 @@
   const countEl = document.getElementById("count");
   const rulerEl = document.getElementById("ruler");
   const lightingEl = document.querySelector(".rose__lighting");
+  const groundEl = document.querySelector(".rose__ground");
+  const heartEl = document.querySelector(".rose__heart");
   const ticks = [];
 
   for (let i = 0; i < TOTAL_PETALS; i += 1) {
@@ -398,11 +427,13 @@
     ticks.push(tick);
   }
 
-  // The directional-light overlays only make sense around an opened bloom, so
-  // they fade in with the flower instead of hovering over the bud.
+  // The cast shadow, the throat and the directional wash only make sense
+  // around an opened bloom. They vanish with an empty head and arrive with
+  // the petals rather than sitting under them as a ghost flower.
   function updateAmbient(bloom) {
-    if (!lightingEl) return;
-    lightingEl.style.opacity = (bloom * bloom).toFixed(3);
+    if (lightingEl) lightingEl.style.opacity = Math.pow(bloom, 1.7).toFixed(3);
+    if (groundEl) groundEl.style.opacity = (bloom * 0.46).toFixed(3);
+    if (heartEl) heartEl.style.opacity = clamp((bloom - 0.012) * 5, 0, 1).toFixed(3);
   }
 
   function setProgress(opened) {
@@ -462,9 +493,8 @@
   function startAutoBloom() {
     if (autoBloomTimer !== null || state.bloomFinished) return;
 
-    // One interval owns the automatic sequence. Every tick selects at most one
-    // closed petal; manually selected petals are already "opening"/"open" and
-    // are therefore skipped.
+    // One interval owns the automatic sequence. A manual click can claim a
+    // petal between ticks; the next tick simply finds the next closed record.
     autoBloomTimer = window.setInterval(() => {
       if (state.bloomFinished) {
         stopAutoBloom();
@@ -480,7 +510,7 @@
   }
 
   function openPetal(record, source) {
-    // This guard is the concurrency boundary: a petal can only be claimed once.
+    // The concurrency boundary: a petal can only be claimed once.
     if (!record || record.status !== "closed" || state.bloomFinished) return false;
 
     record.status = "opening";
@@ -492,12 +522,13 @@
     roseBtn.setAttribute("aria-busy", "true");
 
     animatePetal(record).then(() => {
-      // Only the transition that claimed this petal may complete it.
       if (record.status !== "opening") return;
       record.status = "open";
       record.el.setAttribute("data-state", "open");
       record.el.classList.remove("is-opening");
       record.el.classList.add("is-open");
+      record.el.style.opacity = "1";
+      mountPetalInClip(record);
 
       const opened = countPetals("open");
       setProgress(opened);
@@ -516,14 +547,12 @@
 
     let record = null;
     if (event && event.detail !== 0) {
-      // Pointer clicks must land on the flower.
       const target = event.target;
       if (!(target instanceof Element)) return;
       const petalEl = target.closest("[data-petal]");
       if (petalEl) {
-        const hit = petals.find((candidate) => candidate.el === petalEl);
-        // Clicking a petal that is already opening or open does nothing: it
-        // must not restart, duplicate, or open a different petal by accident.
+        const hit = defRecords.get(petalEl) || petals.find((candidate) => candidate.el === petalEl);
+        // A clicked petal must be closed; opening and open petals are inert.
         if (!hit || hit.status !== "closed") return;
         record = hit;
       } else if (target.closest("[data-rose-hit]")) {
@@ -537,8 +566,6 @@
     }
 
     if (!record) return;
-    // The YouTube player is loaded only when the sealed letter is opened, so
-    // an early petal click cannot compete with the automatic bloom.
     openPetal(record, "manual");
   }
 
@@ -553,12 +580,13 @@
     plate.classList.add("is-bloomed");
     setProgress(TOTAL_PETALS);
     updateRoseLabel();
-    // The last petal has already settled; give the final progress mark a beat
-    // to register, then let the letter take over without a staged pause.
+    // The last petal has already settled; give the final progress mark a
+    // breath, then let the letter take its place without a staged pause.
     setTimeout(unlockGreeting, prefersReduced() ? 40 : 280);
   }
 
   roseBtn.addEventListener("click", handleRoseClick);
+
 
   /* --- The Vietnamese letter --------------------------------------------- */
   const GREETING_PARAGRAPHS = [

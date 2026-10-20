@@ -302,8 +302,21 @@ button { -webkit-tap-highlight-color: transparent; }
 .rose__flower { cursor: pointer; }
 .rose__hit { cursor: pointer; }
 .rose__svg .petal__blade { cursor: pointer; }
+/* A fresh flower head is genuinely empty: unopened petals exist as stable,
+   individually addressable records, but they are not painted yet. Their
+   invisible blades still accept a direct click, and the central hit area
+   offers a forgiving fallback. */
+.rose__flower .petal { opacity: 0; }
+.rose__flower .petal[data-state="opening"],
+.rose__flower .petal[data-state="open"] { opacity: 1; }
+.rose__flower .petal[data-state="closed"] { cursor: pointer; }
+.rose__flower .petal[data-state="closed"] .petal__blade {
+  pointer-events: all;
+  cursor: pointer;
+}
 .rose[disabled] { cursor: default; }
 .rose[disabled] .rose__flower { cursor: default; }
+.rose[disabled] .rose__flower .petal { cursor: default; }
 
 /* SVG botanical notes */
 .note {
@@ -1173,13 +1186,17 @@ body.is-dialog-open .music-cue { display: none; }
 @keyframes backdropIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes backdropOut { to { opacity: 0; } }
 
-.rose__lighting { pointer-events: none; opacity: 0; transition: opacity 0.5s ease; }
-/* Decorative layers never intercept a click; only petals and the hit area do. */
+.rose__lighting,
 .rose__ground,
-.rose__heart { pointer-events: none; }
+.rose__heart { pointer-events: none; opacity: 0; transition: opacity 0.5s ease; }
+/* Decorative layers never intercept a click; only petals and the hit area do. */
 .rose__core { mix-blend-mode: multiply; }
-.rose__shade { mix-blend-mode: multiply; }
-.rose__light { mix-blend-mode: soft-light; }
+.rose__relief { mix-blend-mode: soft-light; }
+/* A full-bleed ellipse of shadow/light would tint the paper behind the
+   flower and read as a grey plate. Depth belongs to the petals themselves. */
+.rose__ground,
+.rose__shade,
+.rose__light { display: none; }
 .sequence.is-leaving {
   opacity: 0;
   transition: opacity 0.2s ease;
