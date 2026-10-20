@@ -154,6 +154,7 @@ function petalOutline(len, half, p, rnd) {
   const rufPhase = rnd() * Math.PI * 2;
   const tipShift = half * p.asym * (rnd() - 0.5) * 1.4;
   const pts = [];
+  const rim = [];
 
   /* left flank: claw -> shoulder */
   for (let i = 0; i <= sideSteps; i += 1) {
@@ -177,6 +178,7 @@ function petalOutline(len, half, p, rnd) {
       tipShift;
     const y = -len * (p.shoulder + (1 - p.shoulder) * dome) + ruffle + notch + tilt;
     pts.push([x, y]);
+    rim.push([x, y]);
   }
 
   /* right flank: shoulder -> claw */
@@ -189,7 +191,26 @@ function petalOutline(len, half, p, rnd) {
     pts.push([w * bulge * edge * lean + tipShift * t * t, -len * t * p.shoulder]);
   }
 
-  return smoothClosedPath(pts, 0.85);
+  return { d: smoothClosedPath(pts, 0.85), rim };
+}
+
+/* The rolled rim: a narrow band just inside the edge of the petal that turns
+   back towards the base. It is what makes a real petal read as a curled
+   sheet of tissue rather than a flat cut-out. The band is inset from the
+   outline on purpose: a band that sat on the edge would read as a contour
+   line around the petal, which is exactly the hard outline to avoid. */
+function petalCurlBand(rim, inset, depth) {
+  if (rim.length < 4) return "";
+  const at = (amount) => rim.map(([x, y]) => {
+    const l = Math.hypot(x, y) || 1;
+    return [x + (x / l) * amount, y + (y / l) * amount];
+  });
+  const near = at(inset);
+  const far = at(inset + depth);
+  const out = [`M${num(near[0][0])},${num(near[0][1])}`];
+  for (let i = 1; i < near.length; i += 1) out.push(`L${num(near[i][0])},${num(near[i][1])}`);
+  for (let i = far.length - 1; i >= 0; i -= 1) out.push(`L${num(far[i][0])},${num(far[i][1])}`);
+  return out.join("") + "Z";
 }
 
 /* Faint radial veins: one path holding several sub-paths. */
@@ -210,6 +231,255 @@ function petalVeins(len, half, p, rnd) {
   }
   return out.join("");
 }
+
+/* ==========================================================================
+   The stem and its foliage
+   --------------------------------------------------------------------------
+   A cut rose carries a handful of real leaves. They are the second half of
+   the illustration: without them the flower floats on a bare line. The
+   leaves are generated here with the same care as the petals — a lanceolate
+   blade with a serrated margin, a midrib, secondary veins, a visible
+   petiole — and are baked into the same data file.
+   ========================================================================== */
+
+/* The spine of the stem, from the flower head down to the bottom edge. */
+const STEM_SPINE = [
+  [500, 396], [496, 470], [503, 548], [497, 624], [504, 702],
+  [500, 782], [507, 862], [509, 942], [515, 1022], [518, 1092], [522, 1142]
+];
+
+/* Catmull-Rom through an open list, emitted as cubic Bézier segments. */
+function smoothOpenPath(points, tension) {
+  const k = (tension === undefined ? 0.9 : tension) / 6;
+  const n = points.length;
+  const out = [`M${num(points[0][0])},${num(points[0][1])}`];
+  for (let i = 0; i < n - 1; i += 1) {
+    const p0 = points[Math.max(0, i - 1)];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[Math.min(n - 1, i + 2)];
+    out.push(
+      `C${num(p1[0] + (p2[0] - p0[0]) * k)},${num(p1[1] + (p2[1] - p0[1]) * k)}` +
+      ` ${num(p2[0] - (p3[0] - p1[0]) * k)},${num(p2[1] - (p3[1] - p1[1]) * k)}` +
+      ` ${num(p2[0])},${num(p2[1])}`
+    );
+  }
+  return out.join("");
+}
+
+function sampleSpline(points, count) {
+  const segs = points.length - 1;
+  const out = [];
+  for (let s = 0; s < count; s += 1) {
+    const u = (s / (count - 1)) * segs;
+    const i = Math.min(segs - 1, Math.floor(u));
+    const t = u - i;
+    const p0 = points[Math.max(0, i - 1)];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[Math.min(points.length - 1, i + 2)];
+    const t2 = t * t;
+    const t3 = t2 * t;
+    const h = (a, b, c, d) =>
+      0.5 * ((2 * b) + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t2 + (-a + 3 * b - 3 * c + d) * t3);
+    out.push([h(p0[0], p1[0], p2[0], p3[0]), h(p0[1], p1[1], p2[1], p3[1])]);
+  }
+  return out;
+}
+
+const spine = sampleSpline(STEM_SPINE, 121);
+
+/* The stem is drawn as three strokes: a soft shadow, the body, and a thin
+   highlight running up the lit side. */
+function offsetSpine(dx) {
+  const out = [];
+  for (let i = 0; i < spine.length; i += 1) {
+    const a = spine[Math.max(0, i - 1)];
+    const b = spine[Math.min(spine.length - 1, i + 1)];
+    const tx = b[0] - a[0];
+    const ty = b[1] - a[1];
+    const len = Math.hypot(tx, ty) || 1;
+    out.push([spine[i][0] - (ty / len) * dx, spine[i][1] + (tx / len) * dx]);
+  }
+  return smoothOpenPath(out, 0.9);
+}
+
+/* The lanceolate width profile of a leaflet: narrow at the claw, widest at
+   about a third of the way, and drawn to a point. */
+function leafProfile(u, width) {
+  return width * Math.pow(Math.sin(Math.PI * Math.pow(u, 0.62)), 0.78);
+}
+
+/* --- one leaflet ---------------------------------------------------------- */
+/* The blade is built around a curved midrib. The margin is sampled finely so
+   the lanceolate profile stays smooth, then a saw-tooth is laid over it to
+   give the fine serration a rose leaflet has. */
+function leafBlade(len, width, rnd, opts) {
+  const { arch, droop, teeth, toothDepth } = opts;
+  const samples = teeth * 4;
+  const mid = [];
+  for (let i = 0; i <= samples; i += 1) {
+    const u = i / samples;
+    // cubic from (0,0) to (len, droop) arching over the top
+    const c1x = len * 0.28;
+    const c1y = -arch;
+    const c2x = len * 0.72;
+    const c2y = droop * 0.35 - arch * 0.45;
+    const t = u;
+    const mt = 1 - t;
+    mid.push([
+      3 * mt * mt * t * c1x + 3 * mt * t * t * c2x + t * t * t * len,
+      3 * mt * mt * t * c1y + 3 * mt * t * t * c2y + t * t * t * droop
+    ]);
+  }
+  const norm = [];
+  for (let i = 0; i <= samples; i += 1) {
+    const a = mid[Math.max(0, i - 1)];
+    const b = mid[Math.min(samples, i + 1)];
+    const tx = b[0] - a[0];
+    const ty = b[1] - a[1];
+    const l = Math.hypot(tx, ty) || 1;
+    norm.push([-ty / l, tx / l]);
+  }
+  const tooth = (u) => {
+    const phase = (u * teeth) % 1;
+    // saw-tooth: a valley then a point leaning towards the tip
+    const v = phase < 0.45 ? phase / 0.45 : 1 - (phase - 0.45) / 0.55;
+    return 1 - toothDepth * (1 - v) * (u > 0.06 && u < 0.94 ? 1 : 0);
+  };
+  const margin = (i, sign) => {
+    const u = i / samples;
+    const w = leafProfile(u, width) * tooth(u);
+    return [mid[i][0] + norm[i][0] * w * sign, mid[i][1] + norm[i][1] * w * sign];
+  };
+  const pts = [];
+  for (let i = 0; i <= samples; i += 1) pts.push(margin(i, -1));
+  for (let i = samples; i >= 0; i -= 1) pts.push(margin(i, 1));
+  return { outline: pts, mid, norm, samples, width };
+}
+
+/* The midrib, and the secondary veins that fan from it to the margin. */
+function leafVeins(blade, rnd) {
+  const { mid, norm, samples, width } = blade;
+  const midrib = smoothOpenPath(mid, 0.9);
+  const out = [];
+  const count = 5 + Math.floor(rnd() * 2);
+  for (let s = 1; s <= count; s += 1) {
+    const u = 0.12 + (s / (count + 1)) * 0.72;
+    const idx = Math.round(u * samples);
+    const endIdx = Math.min(samples, Math.round((u + 0.14) * samples));
+    const wRoot = leafProfile(u, width);
+    const wEnd = leafProfile((endIdx / samples), width);
+    for (const sign of [-1, 1]) {
+      const root = mid[idx];
+      const tip = [
+        mid[endIdx][0] + norm[endIdx][0] * wEnd * sign,
+        mid[endIdx][1] + norm[endIdx][1] * wEnd * sign
+      ];
+      const c1 = [
+        root[0] + norm[idx][0] * wRoot * 0.5 * sign,
+        root[1] + norm[idx][1] * wRoot * 0.5 * sign
+      ];
+      const c2 = [root[0] + (tip[0] - root[0]) * 0.66, root[1] + (tip[1] - root[1]) * 0.66];
+      out.push(
+        `M${num(root[0])},${num(root[1])}` +
+        `C${num(c1[0])},${num(c1[1])} ${num(c2[0])},${num(c2[1])} ${num(tip[0])},${num(tip[1])}`
+      );
+    }
+  }
+  return { midrib, veins: out.join("") };
+}
+
+/* --- the leaves ------------------------------------------------------------ */
+/* Rose leaves are alternate on the stem. They are not mirror images: the
+   lengths, droops and heights are all different, and a few sit close
+   together so the lower stem reads as a leafy spray rather than a pattern. */
+const LEAF_PLAN = [
+  { y: 648, side: 1, len: 92, wid: 24, droop: 26, arch: 9, teeth: 10, petiole: 24, tone: 1.02 },
+  { y: 704, side: -1, len: 118, wid: 33, droop: 30, arch: 12, teeth: 11, petiole: 30, tone: 1.06 },
+  { y: 758, side: 1, len: 146, wid: 39, droop: 22, arch: 15, teeth: 12, petiole: 34, tone: 0.94 },
+  { y: 822, side: -1, len: 178, wid: 48, droop: 26, arch: 20, teeth: 13, petiole: 38, tone: 1.10 },
+  { y: 896, side: 1, len: 192, wid: 52, droop: 19, arch: 18, teeth: 13, petiole: 36, tone: 0.90 },
+  { y: 966, side: -1, len: 164, wid: 44, droop: 24, arch: 16, teeth: 12, petiole: 33, tone: 1.02 },
+  { y: 1032, side: 1, len: 130, wid: 35, droop: 17, arch: 13, teeth: 11, petiole: 29, tone: 0.96 },
+  { y: 1090, side: -1, len: 102, wid: 27, droop: 21, arch: 10, teeth: 10, petiole: 26, tone: 1.04 }
+];
+
+const leafRecords = [];
+LEAF_PLAN.forEach((plan, index) => {
+  const rnd = mulberry32(5521 + index * 7717);
+  const len = plan.len * (0.95 + rnd() * 0.1);
+  const width = plan.wid * (0.92 + rnd() * 0.16);
+  const arch = plan.arch * (0.85 + rnd() * 0.3);
+  const droop = plan.droop * (0.8 + rnd() * 0.4);
+  const blade = leafBlade(len, width, rnd, {
+    arch, droop, teeth: plan.teeth, toothDepth: 0.07 + rnd() * 0.05
+  });
+  const veins = leafVeins(blade, rnd);
+
+  // The stem point the leaf springs from.
+  let best = spine[0];
+  let bestD = Infinity;
+  spine.forEach((p) => {
+    const d = Math.abs(p[1] - plan.y);
+    if (d < bestD) { bestD = d; best = p; }
+  });
+
+  // Direction: out to the side and down, with the droop varying per leaf.
+  const dir = plan.side < 0 ? 180 - droop : droop;
+
+  // The petiole leaves the stem and curves slightly before the blade starts.
+  const pet = plan.petiole;
+  const petiole =
+    `M0,0` +
+    `C${num(pet * 0.3)},${num(-pet * 0.1)} ${num(pet * 0.66)},${num(-pet * 0.16)} ${num(pet)},0`;
+
+  leafRecords.push({
+    x: Number(best[0].toFixed(2)),
+    y: Number(best[1].toFixed(2)),
+    dir: Number(dir.toFixed(2)),
+    petiole: petiole,
+    petioleLen: pet,
+    blade: leafBladePath(blade),
+    midrib: veins.midrib,
+    veins: veins.veins,
+    tone: plan.tone,
+    // a hint of how much of the page's upper-left light reaches this leaf
+    lit: Number((plan.side < 0 ? 1 : 0.86).toFixed(3)),
+  });
+});
+
+function leafBladePath(blade) {
+  const p = blade.outline;
+  let d = `M${num(p[0][0])},${num(p[0][1])}`;
+  for (let i = 1; i < p.length; i += 1) d += `L${num(p[i][0])},${num(p[i][1])}`;
+  return d + "Z";
+}
+
+/* A few small thorns, low on the stem, where they would really sit. */
+const THORN_PLAN = [
+  { y: 782, side: 1, len: 17, drop: 12 },
+  { y: 932, side: -1, len: 15, drop: 10 },
+  { y: 1058, side: 1, len: 14, drop: 9 }
+];
+const thorns = THORN_PLAN.map((plan) => {
+  let best = spine[0];
+  let bestD = Infinity;
+  spine.forEach((p) => {
+    const d = Math.abs(p[1] - plan.y);
+    if (d < bestD) { bestD = d; best = p; }
+  });
+  const dx = plan.side * plan.len;
+  return (
+    `M${num(best[0])},${num(best[1] - 3)}` +
+    `C${num(best[0] + dx * 0.55)},${num(best[1] - 4)}` +
+    ` ${num(best[0] + dx * 0.92)},${num(best[1] + plan.drop * 0.35)}` +
+    ` ${num(best[0] + dx)},${num(best[1] + plan.drop)}` +
+    `C${num(best[0] + dx * 0.5)},${num(best[1] + plan.drop * 0.55)}` +
+    ` ${num(best[0] + dx * 0.2)},${num(best[1] + plan.drop * 0.3)}` +
+    ` ${num(best[0])},${num(best[1] + 4)}Z`
+  );
+});
 
 /* --- build the flower ----------------------------------------------------- */
 const petals = [];
@@ -239,7 +509,10 @@ for (let i = 0; i < TOTAL; i += 1) {
     (variant === 1 ? 0.86 : variant === 0 ? 1.07 : 1);
   const half = len * halfRatio;
   const sy = curve(FORESHORTEN, s) * (1 + (rnd() - 0.5) * 0.07);
-  const lean = curve(LEAN, s) + (rnd() - 0.5) * 9;
+  /* A few of the outer petals splay further out than the rest. That single
+     irregularity is what stops the silhouette from being a perfect circle. */
+  const splay = s > 0.74 && rnd() < 0.34 ? 11 + rnd() * 17 : 0;
+  const lean = curve(LEAN, s) + (rnd() - 0.5) * 9 + splay;
   const swirl = curve(SWIRL, s) + (rnd() - 0.5) * 7;
 
   const p = {
@@ -262,6 +535,13 @@ for (let i = 0; i < TOTAL; i += 1) {
   const light = clamp(curve(LIGHT, s) + (rnd() - 0.5) * 6.4, 9, 46);
   const colour = hslToHex(hue, sat, light);
 
+  const shape = petalOutline(len, half, p, rnd);
+  /* Roughly a third of the petals carry a rolled rim, mostly the broader
+     ones. It is the detail that separates a living petal from a cut-out. */
+  const curl = s > 0.22 && rnd() < 0.42
+    ? petalCurlBand(shape.rim, len * 0.012, len * (0.03 + rnd() * 0.045))
+    : "";
+
   petals.push({
     i,
     s: Number(s.toFixed(4)),
@@ -271,7 +551,8 @@ for (let i = 0; i < TOTAL; i += 1) {
     lean: Number(lean.toFixed(2)),
     swirl: Number(swirl.toFixed(2)),
     colour,
-    d: petalOutline(len, half, p, rnd),
+    d: shape.d,
+    curl,
     veins: petalVeins(len, half, p, rnd),
   });
 }
@@ -290,6 +571,13 @@ const banner = `/* =============================================================
 const body = `${banner}window.ROSE_GEOMETRY = ${JSON.stringify({
   total: TOTAL,
   goldenAngle: GOLDEN_ANGLE,
+  stem: {
+    path: smoothOpenPath(spine, 0.9),
+    shade: offsetSpine(3.4),
+    light: offsetSpine(-2.4),
+    thorns,
+  },
+  leaves: leafRecords,
   petals,
 })};
 `;

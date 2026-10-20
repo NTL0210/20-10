@@ -56,7 +56,9 @@ node tools/build-rose.mjs --check  # fail if the baked file is stale (used by CI
   spiral rather than a drawn rosette. Four petal archetypes (broad and round,
   narrow and pointed, deeply ruffled, calm) keep neighbours from being the same
   shape scaled up, and every petal carries its own length, width, lean, swirl,
-  rim tilt, asymmetry, ruffle depth and colour.
+  rim tilt, asymmetry, ruffle depth and colour. A few of the outer petals
+  splay further out than the rest; that single irregularity is what stops the
+  silhouette from being a perfect circle.
 - **The petal.** A garden-rose petal is a rounded fan, not a daisy ray: a narrow
   claw at the base, shoulders that flare quickly, and a broad, softly domed rim
   with a shallow notch and two long, slow undulations. The outline is sampled
@@ -67,15 +69,44 @@ node tools/build-rose.mjs --check  # fail if the baked file is stale (used by CI
   warm at the rim), one **global** light wash shared by the whole flower in
   flower space, a faint radial vein set, and a dissolving warm rim light. A
   contact shadow, darkest at the claw and fading to nothing at the rim, gives
-  each petal real occlusion on the one beneath it. There is no hard outline
-  around any petal, and the only SVG filter in the whole page is a single
-  `feDropShadow` on the flower group.
+  each petal real occlusion on the one beneath it. About a third of the
+  petals also carry a **rolled rim**: a narrow band just inside the edge
+  that turns back towards the base, so the petal reads as curled tissue
+  rather than a flat plate. There is no hard outline around any petal, and
+  the only SVG filter in the whole page is a single `feDropShadow` on the
+  flower group.
+
+### The stem and the foliage
+
+The stem and its leaves come from the same baked file, so every leaf really
+springs from the stem instead of floating beside it.
+
+- **The stem.** A single spline with a slow, natural drift, drawn as three
+  strokes: a soft shadow, the body, and a thin highlight running up the lit
+  side. Three small thorns sit low on the stem where they would really grow.
+- **Eight leaves**, alternate on the stem as rose leaves are, from a small
+  one just under the bloom to a small one at the foot, with the largest
+  pair around the middle. Their heights, lengths, widths, droops and
+  greens are all different, so the spray never reads as a pattern.
+- **Each leaflet** is a lanceolate blade built around a curved midrib: a
+  narrow claw, a broad middle, a drawn point, and a finely serrated margin.
+  The serration is a saw-tooth laid over a finely sampled profile, so the
+  edge stays botanical rather than spiky. A midrib and five or six
+  secondary veins fan from the centre to the margin, and the petiole leaves
+  the stem more horizontally than the blade, so the leaf bends away from
+  the stem instead of sprouting from it.
+- **The greens** are muted sage, olive, forest and grey-sage, each leaf
+  toned by how much of the page's upper-left light reaches it. Form comes
+  from two shared gradients — one along the blade, one across it — rather
+  than from heavy shadows, so the leaves stay part of the drawing instead of
+  becoming a separate decoration.
+
 - **Performance.** The previous version used **two blur filters per petal plus
   a turbulence/displacement filter on the whole flower**: 203 filter regions
   re-rasterised on every animation frame. The new version uses one filter for
   the entire bloom, which cut the worst-case frame time from 21.6 ms (p95 42.4,
-  max 84.8) to 6.1 ms (p95 6.2, max 6.5) and the SVG node count from 2 458 to
-  994.
+  max 84.8) to 8.5 ms (p95 11.2, max 14.4) and the SVG node count from 2 458 to
+  1 081.
 
 ### Motion design
 

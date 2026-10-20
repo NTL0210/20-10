@@ -50,6 +50,22 @@
                   <stop offset=".6" stop-color="#67745f"/>
                   <stop offset="1" stop-color="#505d4b"/>
                 </linearGradient>
+                <!-- The form of a leaflet: dark where it leaves the stem,
+                     lighter towards the tip. -->
+                <linearGradient id="leafForm" x1="0" y1=".5" x2="1" y2=".5">
+                  <stop offset="0" stop-color="#1d2c1c" stop-opacity=".40"/>
+                  <stop offset=".22" stop-color="#1d2c1c" stop-opacity=".15"/>
+                  <stop offset=".55" stop-color="#fdf6e6" stop-opacity=".02"/>
+                  <stop offset="1" stop-color="#fff4de" stop-opacity=".16"/>
+                </linearGradient>
+                <!-- The roll of the blade: one margin catches the light, the
+                     other falls away into shade. -->
+                <linearGradient id="leafRoll" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#16240f" stop-opacity=".20"/>
+                  <stop offset=".34" stop-color="#fffdf2" stop-opacity=".06"/>
+                  <stop offset=".66" stop-color="#fffdf2" stop-opacity=".02"/>
+                  <stop offset="1" stop-color="#16240f" stop-opacity=".22"/>
+                </linearGradient>
                 <!-- Shading for a single petal, in the petal's own frame.
                      Offset 0 is the rim, offset 1 the claw at the base:
                      the base is buried in the flower and reads as occlusion,
@@ -105,42 +121,10 @@
                 </filter>
               </defs>
 
-              <g class="stem" aria-hidden="true">
-                <path class="stem__shade" d="M500 400 C493 560 512 690 506 800 C501 902 512 1010 522 1124"
-                      fill="none" stroke="#40503f" stroke-width="13" stroke-linecap="round" opacity=".26"/>
-                <path class="stem__line" d="M500 400 C493 560 512 690 506 800 C501 902 512 1010 522 1124"
-                      fill="none" stroke="url(#stemGrad)" stroke-width="8.5" stroke-linecap="round"/>
-                <path class="stem__light" d="M497 430 C490 560 509 690 503 800 C498 902 509 1010 519 1118"
-                      fill="none" stroke="#c9d0bd" stroke-width="1.6" stroke-linecap="round" opacity=".42"/>
-
-                <g class="leaf leaf--left">
-                  <path d="M509 902 C456 908 390 934 326 986 C372 1002 438 992 486 962 C504 950 512 926 509 902 Z"
-                        fill="url(#leafGrad)" stroke="#46543f" stroke-width="1.2"/>
-                  <path d="M509 906 C456 912 392 938 330 986" fill="none" stroke="#d8dec9" stroke-width="1.1" opacity=".34"/>
-                  <path d="M507 908 C450 922 390 944 334 982" fill="none" stroke="#c3cbb2" stroke-width="1.3" opacity=".55"/>
-                  <path d="M470 936 C452 926 440 920 424 914 M438 952 C420 947 404 943 388 941 M412 966 C400 962 388 960 376 958 M450 944 C438 938 428 933 418 927"
-                        fill="none" stroke="#c3cbb2" stroke-width=".9" opacity=".32"/>
-                </g>
-
-                <g class="leaf leaf--right">
-                  <path d="M512 1008 C566 990 632 986 700 998 C666 1030 606 1046 552 1038 C532 1035 518 1024 512 1008 Z"
-                        fill="url(#leafGrad)" stroke="#46543f" stroke-width="1.2"/>
-                  <path d="M516 1010 C570 995 634 991 696 1001" fill="none" stroke="#d8dec9" stroke-width="1.1" opacity=".3"/>
-                  <path d="M514 1010 C572 1000 634 996 694 1000" fill="none" stroke="#c3cbb2" stroke-width="1.3" opacity=".55"/>
-                  <path d="M566 1010 C584 1004 600 1002 616 1002 M600 1020 C616 1018 632 1018 648 1020 M634 1014 C646 1014 658 1015 668 1016 M548 1012 C560 1007 572 1004 584 1003"
-                        fill="none" stroke="#c3cbb2" stroke-width=".9" opacity=".32"/>
-                </g>
-
-                <g class="leaf leaf--low">
-                  <path d="M519 1072 C486 1056 448 1050 410 1058 C426 1082 460 1096 496 1092 C512 1090 520 1083 519 1072 Z"
-                        fill="url(#leafGrad)" stroke="#46543f" stroke-width="1.1"/>
-                  <path d="M519 1068 C486 1058 450 1054 414 1060" fill="none" stroke="#d8dec9" stroke-width="1" opacity=".3"/>
-                  <path d="M517 1072 C482 1064 448 1060 416 1062" fill="none" stroke="#c3cbb2" stroke-width="1.1" opacity=".5"/>
-                </g>
-
-                <path d="M508 858 C520 852 530 854 538 862 C526 866 516 865 508 858 Z" fill="#4d5c47" opacity=".9"/>
-                <path d="M509 1042 C497 1036 487 1038 479 1046 C491 1050 501 1049 509 1042 Z" fill="#4d5c47" opacity=".85"/>
-              </g>
+              <!-- The stem and its leaves are generated from the same baked
+                   geometry as the petals (tools/build-rose.mjs) and built
+                   into this group at start-up. -->
+              <g class="stem" id="stem" aria-hidden="true"></g>
 
               <g class="rose__flower" id="flower" transform="translate(500 400)">
                 <circle class="rose__hit" data-rose-hit cx="0" cy="0" r="330" fill="transparent" pointer-events="all"/>

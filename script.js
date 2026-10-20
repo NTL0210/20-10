@@ -112,7 +112,16 @@
     rim.setAttribute("stroke-width", "1.15");
     rim.setAttribute("stroke-linejoin", "round");
 
-    fold.append(shadow, blade, shade, wash, veins, rim);
+    fold.append(shadow, blade, shade, wash);
+    // A petal whose edge rolls over shows a narrow turned band along the rim.
+    if (spec.curl) {
+      const curl = document.createElementNS(SVG_NS, "path");
+      curl.setAttribute("class", "petal__curl");
+      curl.setAttribute("d", spec.curl);
+      curl.setAttribute("fill", "rgba(92,10,26,.20)");
+      fold.appendChild(curl);
+    }
+    fold.append(veins, rim);
     el.appendChild(fold);
     petalsGroup.appendChild(el);
 
@@ -198,6 +207,144 @@
     setProgress(openedCount);
     updateRoseLabel();
     if (openedCount >= TOTAL_PETALS) finishBloom();
+  }
+
+  /* --- the stem and its leaves -------------------------------------------- */
+  /* The foliage is designed with the same care as the petals and comes from
+     the same baked file, so every leaf really springs from the stem instead
+     of floating beside it. */
+  const stemGroup = document.getElementById("stem");
+  const stem = geometry.stem;
+  const LEAF_GREENS = [
+    { h: 102, s: 13, l: 43 },   // sage
+    { h: 92,  s: 16, l: 38 },   // olive
+    { h: 110, s: 15, l: 34 },   // forest
+    { h: 97,  s: 12, l: 41 }    // grey-sage
+  ];
+
+  function hslHex(h, s, l) {
+    const sn = s / 100;
+    const ln = clamp(l, 0, 100) / 100;
+    const c = (1 - Math.abs(2 * ln - 1)) * sn;
+    const hp = (((h % 360) + 360) % 360) / 60;
+    const x = c * (1 - Math.abs((hp % 2) - 1));
+    let r = 0;
+    let g = 0;
+    let b = 0;
+    if (hp < 1) [r, g, b] = [c, x, 0];
+    else if (hp < 2) [r, g, b] = [x, c, 0];
+    else if (hp < 3) [r, g, b] = [0, c, x];
+    else if (hp < 4) [r, g, b] = [0, x, c];
+    else if (hp < 5) [r, g, b] = [x, 0, c];
+    else [r, g, b] = [c, 0, x];
+    const m = ln - c / 2;
+    const to = (v) => Math.round(clamp((v + m) * 255, 0, 255)).toString(16).padStart(2, "0");
+    return `#${to(r)}${to(g)}${to(b)}`;
+  }
+
+  function buildStem() {
+    if (!stemGroup || !stem) return;
+
+    const shade = document.createElementNS(SVG_NS, "path");
+    shade.setAttribute("class", "stem__shade");
+    shade.setAttribute("d", stem.path);
+    shade.setAttribute("fill", "none");
+    shade.setAttribute("stroke", "#40503f");
+    shade.setAttribute("stroke-width", "12.5");
+    shade.setAttribute("stroke-linecap", "round");
+    shade.setAttribute("opacity", ".2");
+
+    const line = document.createElementNS(SVG_NS, "path");
+    line.setAttribute("class", "stem__line");
+    line.setAttribute("d", stem.path);
+    line.setAttribute("fill", "none");
+    line.setAttribute("stroke", "url(#stemGrad)");
+    line.setAttribute("stroke-width", "8.5");
+    line.setAttribute("stroke-linecap", "round");
+
+    const light = document.createElementNS(SVG_NS, "path");
+    light.setAttribute("class", "stem__light");
+    light.setAttribute("d", stem.light);
+    light.setAttribute("fill", "none");
+    light.setAttribute("stroke", "#c9d0bd");
+    light.setAttribute("stroke-width", "1.6");
+    light.setAttribute("stroke-linecap", "round");
+    light.setAttribute("opacity", ".42");
+
+    stemGroup.append(shade, line, light);
+
+    (stem.thorns || []).forEach((d) => {
+      const thorn = document.createElementNS(SVG_NS, "path");
+      thorn.setAttribute("class", "stem__thorn");
+      thorn.setAttribute("d", d);
+      thorn.setAttribute("fill", "#5c6b52");
+      thorn.setAttribute("opacity", ".85");
+      stemGroup.appendChild(thorn);
+    });
+
+    (geometry.leaves || []).forEach((leaf, index) => {
+      const base = LEAF_GREENS[index % LEAF_GREENS.length];
+      const lightness = clamp(base.l * leaf.tone * leaf.lit, 24, 48);
+      const colour = hslHex(base.h + (index % 3) - 1, base.s, lightness);
+
+      const group = document.createElementNS(SVG_NS, "g");
+      group.setAttribute("class", "leaf");
+      // The petiole leaves the stem more horizontally than the blade, so the
+      // leaf reads as bending away from the stem rather than sprouting from it.
+      const side = leaf.dir > 90 ? -1 : 1;
+      const lift = 22;
+      const petioleDir = leaf.dir - side * lift;
+      group.setAttribute("transform", `translate(${leaf.x} ${leaf.y}) rotate(${petioleDir.toFixed(2)})`);
+
+      const petiole = document.createElementNS(SVG_NS, "path");
+      petiole.setAttribute("class", "leaf__petiole");
+      petiole.setAttribute("d", leaf.petiole);
+      petiole.setAttribute("fill", "none");
+      petiole.setAttribute("stroke", colour);
+      petiole.setAttribute("stroke-width", "3.4");
+      petiole.setAttribute("stroke-linecap", "round");
+      petiole.setAttribute("opacity", ".92");
+
+      const bladeGroup = document.createElementNS(SVG_NS, "g");
+      bladeGroup.setAttribute("transform", `translate(${leaf.petioleLen || 0} 0) rotate(${(side * lift).toFixed(2)})`);
+
+      const blade = document.createElementNS(SVG_NS, "path");
+      blade.setAttribute("class", "leaf__blade");
+      blade.setAttribute("d", leaf.blade);
+      blade.setAttribute("fill", colour);
+
+      const form = document.createElementNS(SVG_NS, "path");
+      form.setAttribute("class", "leaf__form");
+      form.setAttribute("d", leaf.blade);
+      form.setAttribute("fill", "url(#leafForm)");
+
+      const roll = document.createElementNS(SVG_NS, "path");
+      roll.setAttribute("class", "leaf__roll");
+      roll.setAttribute("d", leaf.blade);
+      roll.setAttribute("fill", "url(#leafRoll)");
+
+      const veins = document.createElementNS(SVG_NS, "path");
+      veins.setAttribute("class", "leaf__veins");
+      veins.setAttribute("d", leaf.veins);
+      veins.setAttribute("fill", "none");
+      veins.setAttribute("stroke", "#dfe6cd");
+      veins.setAttribute("stroke-width", ".6");
+      veins.setAttribute("stroke-linecap", "round");
+      veins.setAttribute("opacity", ".17");
+
+      const midrib = document.createElementNS(SVG_NS, "path");
+      midrib.setAttribute("class", "leaf__midrib");
+      midrib.setAttribute("d", leaf.midrib);
+      midrib.setAttribute("fill", "none");
+      midrib.setAttribute("stroke", "#e6ecd6");
+      midrib.setAttribute("stroke-width", ".9");
+      midrib.setAttribute("stroke-linecap", "round");
+      midrib.setAttribute("opacity", ".3");
+
+      bladeGroup.append(blade, form, roll, veins, midrib);
+      group.append(petiole, bladeGroup);
+      stemGroup.appendChild(group);
+    });
   }
 
   /* --- progress --------------------------------------------------------- */
@@ -1264,6 +1411,7 @@
   setProgress(0);
   updateSequenceRule();
   updateRoseLabel();
+  buildStem();
 
   // Every fresh page load starts from the same all-closed records. No petal
   // state or progress is written to storage, cookies, the URL or a backend.
