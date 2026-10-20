@@ -247,11 +247,14 @@ iframe), is one pixel in size, transparent, non-interactive and never shown.
 
 **One audible attempt, at 35 / 100.** In `onReady`, the page calls
 `setVolume(35)`, then `playVideo()` once. There is no autoplay loop, no repeated
-retry and no duplicate player. A single 4.5 s watchdog observes the result of
-that attempt. The page reports `Lecture en cours.` only when the player is in
-the `PLAYING` state **and** `isMuted()` is false. If YouTube starts muted, the
-page makes one `unMute()` attempt; if the track is still muted, it pauses the
-player, does not claim playback, and shows the activation control. Muted audio
+retry and no duplicate player. A 4.5 s watchdog observes the result of that
+attempt. It grants two extra windows when the player reports `BUFFERING`, and
+only pauses a player that is actually playing; an unstarted player is left free
+to finish a slow start. The page reports `Lecture en cours.` only when the
+player is in the `PLAYING` state **and** `isMuted()` is false. If YouTube starts
+muted, the page makes one `unMute()` attempt; if the track is still muted, it
+pauses the player, does not claim playback, and shows the activation control.
+Muted audio
 is never presented as audible music. The IFrame API exposes player and mute
 state, not speaker output; a tab or operating-system mute remains outside the
 page's detection.
