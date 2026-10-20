@@ -231,6 +231,24 @@
     </div>
   </main>
 
+  <div class="music__player" id="playerMount" aria-hidden="true"></div>
+
+  <div class="music-cue" id="musicCue" hidden lang="fr">
+    <button class="music-cue__button" id="enableMusic" type="button"
+            aria-describedby="musicCueStatus">
+      <span class="music-cue__glyph" aria-hidden="true">
+        <svg viewBox="0 0 24 24">
+          <path d="M9 18.2V6.5l9-2v10.9a3.2 3.2 0 1 1-1.6-2.8V7.8L10.7 9.3v8.9A3.2 3.2 0 1 1 9 18.2Z"/>
+        </svg>
+      </span>
+      <span id="musicCueLabel">Activer la musique</span>
+    </button>
+    <a class="music-cue__link" id="musicCueLink"
+       href="https://www.youtube.com/watch?v=cvamJ4oKBGY"
+       target="_blank" rel="noopener noreferrer" hidden>Ouvrir sur YouTube</a>
+    <p class="visually-hidden" id="musicCueStatus" role="status" aria-live="polite"></p>
+  </div>
+
   <dialog id="secretDialog" class="secret" aria-labelledby="secretTitle">
     <div class="secret__sheet">
       <span class="secret__seal" aria-hidden="true">
@@ -308,7 +326,7 @@
         <div class="music__head">
           <p class="kicker">Bande sonore</p>
           <p class="music__status" id="musicStatus" role="status" aria-live="polite">
-            Appuyez sur « Écouter » pour lancer la musique.
+            La musique tente de démarrer avec la page. Vous pouvez la mettre en pause ici.
           </p>
         </div>
         <div class="music__controls">
@@ -330,7 +348,6 @@
         </div>
         <a class="music__link" href="https://www.youtube.com/watch?v=cvamJ4oKBGY"
            target="_blank" rel="noopener noreferrer">Ouvrir sur YouTube</a>
-        <div class="music__player" id="playerMount" aria-hidden="true"></div>
       </footer>
       </div>
     </div>

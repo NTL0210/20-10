@@ -7,8 +7,8 @@ hundred-and-first petal, the rose reveals a Vietnamese letter. A discreet inscri
 inside that letter opens a sealed French puzzle: two Vietnamese questions, a
 six-word sequence, and a final literary sentence. The whole experience is a
 static site with no build step, backend, or API key; the only third-party
-script is the official YouTube IFrame Player API, loaded on demand for the
-soundtrack.
+script is the official YouTube IFrame Player API, loaded during page
+initialisation so the soundtrack can attempt to start with the page.
 
 ## What is in the box
 
@@ -132,12 +132,13 @@ relative so the same files also work from a repository subpath.
 2. **Greeting.** The letter is built only when the 101st petal finishes. It
    contains the Vietnamese greeting and the button
    `Un secret pour mon petit détective`.
-3. **Sealed letter.** Opening the secret loads the official YouTube IFrame
-   Player API (once, on that click), starts the soundtrack at 35 % volume and
-   shows the two Vietnamese questions. The player node is
-   never shown; the soundtrack is presented with a compact play/pause control,
-   a live sound-wave indicator, a real playback status line, an honest progress
-   line and the **Ouvrir sur YouTube** link. Reopening reuses the same player.
+3. **Sealed letter.** Opening the secret shows the two Vietnamese questions.
+   The soundtrack is independent of this click: it is loaded and attempted at
+   page initialisation, at 35 % volume, and never restarted by the letter. The
+   player node is never shown; the soundtrack is presented with a compact
+   play/pause control, a live sound-wave indicator, a real playback status line,
+   an honest progress line and the **Ouvrir sur YouTube** link. Reopening
+   reuses the same player.
 4. **Verification.** Both answers are normalised and checked as SHA-256 digests
    with the Web Crypto API. A partially correct submission preserves the
    correct field; both must pass to continue.
@@ -202,9 +203,12 @@ After the first successful publish:
 4. Open DevTools → **Network** and confirm `styles.css`, `script.js`, the woff2
    files, and `assets/favicon.svg` all return `200` (not `404`).
 5. Open DevTools → **Console** and confirm there are no errors.
-6. Complete the rose (or emulate reduced motion to move quickly), open the
-   secret, and confirm the soundtrack control reports the real player state with
-   volume `35`, and that only one player exists after closing and reopening.
+6. On load, confirm the soundtrack either starts at volume `35` without a click
+   or that the discreet **Activer la musique** control appears. If it appears,
+   click it once and confirm the real player state changes; if playback is still
+   refused, use **Ouvrir sur YouTube**. Confirm the rose and the secret do not
+   restart the player and that only one player exists after closing and
+   reopening the secret.
 7. Check the layout at a wide desktop size and at 390 × 844 in device
    emulation, including the dialog and the soundtrack controls.
 
@@ -232,44 +236,71 @@ After the first successful publish:
   input. With reduced motion the unfold is a 120 ms linear change, and the next
   tap is accepted as soon as that short state change settles.
 
-## Soundtrack (audio-focused)
+## Soundtrack (autoplay with a truthful fallback)
 
 The soundtrack is the official player for
 <https://www.youtube.com/watch?v=cvamJ4oKBGY>, driven through the **YouTube
-IFrame Player API**. The player is created only when the visitor clicks
-`Un secret pour mon petit détective`, so the third-party script never competes
-with the automatic bloom. There is never more than one player.
+IFrame Player API**. The API is loaded during page initialisation, independently
+of the rose and the sealed letter. There is never more than one player. The
+player node lives outside the `<dialog>` (a closed dialog would not render its
+iframe), is one pixel in size, transparent, non-interactive and never shown.
+
+**One audible attempt, at 35 / 100.** In `onReady`, the page calls
+`setVolume(35)`, then `playVideo()` once. There is no autoplay loop, no repeated
+retry and no duplicate player. A single 4.5 s watchdog observes the result of
+that attempt. The page reports `Lecture en cours.` only when the player is in
+the `PLAYING` state **and** `isMuted()` is false. If YouTube starts muted, the
+page makes one `unMute()` attempt; if the track is still muted, it pauses the
+player, does not claim playback, and shows the activation control. Muted audio
+is never presented as audible music. The IFrame API exposes player and mute
+state, not speaker output; a tab or operating-system mute remains outside the
+page's detection.
+
+**If audible autoplay is allowed.** The music starts without a click and
+continues while the 101 petals open. No activation control is shown. The compact
+player interface inside the secret reports the real state and can pause or
+resume it.
+
+**If audible autoplay is refused.** The page shows a fixed, discreet
+**Activer la musique** button at the bottom-right of the sheet. It does not move
+the rose, the counter or the letter, and it does not steal focus. Clicking it
+performs one user-initiated `playVideo()` at 35 % volume. If the player still
+does not reach an audible `PLAYING` state, the button remains available as
+**Réessayer la musique** and an **Ouvrir sur YouTube** link appears with it.
+There is no automatic retry after a refusal. Opening the secret, clicking a petal
+or completing the rose never starts or restarts the player.
+
+**Volume.** The default loudness is **35 / 100**. `setVolume(35)` runs after the
+player is ready and again immediately before every start, so the first audible
+frame is already at 35 %. Player methods are never called before the API and
+player are ready. No volume slider is provided, so 35 % is preserved across
+pause and resume. Perceived loudness still depends on operating-system and
+browser audio settings.
+
+**Autoplay limits.** Browser policies, YouTube embedding permissions, age or
+region restrictions, tracker blockers, offline networks and the video owner's
+settings can prevent or stop playback. The player is a cross-origin iframe. In
+Chromium's strict test mode
+(`--autoplay-policy=user-gesture-required`), YouTube refuses a programmatic
+`playVideo()` sent from a parent-page button even after a trusted click; the
+page cannot override that iframe boundary. In that mode the honest outcome is
+the **Ouvrir sur YouTube** link, which is always revealed after a failed
+activation attempt. With Chromium's normal default policy, audible autoplay
+started in local testing without a click.
 
 The interface is deliberately audio-focused: no video frame, no thumbnail and
-no black rectangle are shown. The player node is moved out of view and the
-reader only sees a minimal play/pause control, an animated sound-wave that runs
-**only while the player reports playback**, a truthful status line
-(`Lecture en cours.`, `En pause.`, `Lecture terminée.`,
-`Chargement de la musique…`, `La lecture est bloquée…`) and a progress line fed
-by `getCurrentTime()` / `getDuration()`.
-
-**Volume.** The default loudness is **35 / 100**. `setVolume(35)` is called in
-the player's `onReady` handler and again immediately before every start, so the
-first audible frame is already at 35 %. Player methods are never called before
-the API and the player are ready. No volume slider is provided, so 35 % is
-preserved across pause and resume. Perceived loudness still depends on the
-operating-system and browser audio settings.
+no black rectangle are shown. The compact player has a real play/pause control,
+an animated sound-wave that runs **only while the player reports playback**, a
+truthful status line (`Lecture en cours.`, `En pause.`, `Lecture terminée.`,
+`Chargement de la musique…`, `La lecture est bloquée…`, plus the explicit
+activation message) and a progress line fed by `getCurrentTime()` /
+`getDuration()`.
 
 **Compliance note.** YouTube's Terms of Service expect the embedded player to
 remain visible, and YouTube does not provide a supported audio-only mode for a
-`watch` URL. Moving the player out of view is therefore a presentation choice,
-not an officially sanctioned one. The reliable, compliant fallback is the
-**Ouvrir sur YouTube** link, which is always present and always opens the
-original watch page.
-
-Autoplay is not guaranteed. Browser autoplay policies, YouTube embedding
-permissions, age or region restrictions, tracker blockers, offline networks and
-the video owner's settings can all prevent or stop playback. When sound does not
-start, the status line says so honestly, the control offers **Réessayer**, and:
-
-- the **Pause / Reprendre** control calls the real player (`pauseVideo` /
-  `playVideo`) and reflects the real player state;
-- **Ouvrir sur YouTube** opens the original video in a new tab.
+`watch` URL. Moving the player out of view is a presentation choice, not an
+officially sanctioned one. The reliable, compliant fallback is the
+**Ouvrir sur YouTube** link, which opens the original watch page.
 
 No audio is downloaded, extracted, proxied, or re-hosted, and no unofficial
 method is used to obtain the stream. Music is optional and never gates the rose,

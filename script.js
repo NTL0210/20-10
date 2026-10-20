@@ -417,7 +417,6 @@
   const state = {
     phase: "initial",
     greetingBuilt: false,
-    secretOpened: false,
     verifying: false,
     q1: false,
     q2: false,
@@ -683,10 +682,8 @@
 
   function openSecret() {
     if (!OPEN_PHASES.has(state.phase) || dialog.open) return;
-    if (!state.secretOpened) {
-      state.secretOpened = true;
-      startPlayback();
-    }
+    // The soundtrack is already attempting to play from page initialisation.
+    // Opening the letter must not restart it or trigger a second attempt.
     if (state.phase === "greetingUnlocked") state.phase = "secretOpen";
 
     dialog.showModal();
@@ -694,6 +691,12 @@
     document.body.classList.add("is-dialog-open");
     const sheet = dialog.querySelector(".secret__sheet");
     if (sheet) sheet.scrollTop = 0;
+    // The progress meter is only useful while the sheet is visible. Start its
+    // lightweight poll now rather than running it behind the closed sheet.
+    if (music.playing) {
+      startProgressPolling();
+      updateProgress();
+    }
 
     setTimeout(() => {
       if (state.completed) {
@@ -715,6 +718,7 @@
       dialog.classList.remove("is-closing");
       document.documentElement.classList.remove("is-dialog-open");
       document.body.classList.remove("is-dialog-open");
+      stopProgressPolling();
       state.closing = false;
       if (state.phase === "secretOpen") state.phase = "greetingUnlocked";
       const opener = document.getElementById("openSecret");
@@ -735,6 +739,7 @@
   dialog.addEventListener("close", () => {
     document.documentElement.classList.remove("is-dialog-open");
     document.body.classList.remove("is-dialog-open");
+    stopProgressPolling();
     if (state.phase === "secretOpen") state.phase = "greetingUnlocked";
   });
 
@@ -744,6 +749,8 @@
   // player node itself is kept out of the way (see .music__player).
   const VIDEO_ID = "cvamJ4oKBGY";
   const DEFAULT_VOLUME = 35;
+  const AUTOPLAY_WATCHDOG_MS = 4500;
+  const YT_UNSTARTED = -1;
   const YT_ENDED = 0;
   const YT_PLAYING = 1;
   const YT_PAUSED = 2;
@@ -756,6 +763,11 @@
   const musicProgress = document.getElementById("musicProgress");
   const musicFill = document.getElementById("musicFill");
   const musicTime = document.getElementById("musicTime");
+  const musicCue = document.getElementById("musicCue");
+  const enableMusic = document.getElementById("enableMusic");
+  const musicCueLabel = document.getElementById("musicCueLabel");
+  const musicCueLink = document.getElementById("musicCueLink");
+  const musicCueStatus = document.getElementById("musicCueStatus");
 
   const music = {
     player: null,
@@ -765,8 +777,16 @@
     wanted: false,
     started: false,
     playing: false,
+    blocked: false,
     failed: false,
-    poll: 0
+    poll: 0,
+    attempts: 0,
+    autoplayAttempted: false,
+    autoplayPending: false,
+    userInitiated: false,
+    starting: false,
+    watchdog: 0,
+    attemptToken: 0
   };
 
   function formatTime(seconds) {
@@ -785,26 +805,54 @@
     musicToggle.setAttribute(
       "aria-label",
       playing ? "Mettre la musique en pause"
-        : music.failed ? "Réessayer la lecture"
-          : music.started ? "Reprendre la musique"
-            : "Lancer la bande sonore"
+        : music.blocked ? "Activer la musique"
+          : music.failed ? "Réessayer la lecture"
+            : music.started ? "Reprendre la musique"
+              : "Lancer la bande sonore"
     );
     if (musicLabel) {
       musicLabel.textContent = playing ? "Pause"
-        : music.failed ? "Réessayer"
-          : music.started ? "Reprendre" : "Écouter";
+        : music.blocked ? "Activer"
+          : music.failed ? "Réessayer"
+            : music.started ? "Reprendre" : "Écouter";
     }
     if (musicSection) musicSection.classList.toggle("is-playing", playing);
   }
 
-  // The IFrame API is loaded only when the reader opens the sealed letter. That
-  // keeps third-party work out of the bloom and still starts playback from a
-  // genuine click.
+  function showMusicCue(message, showLink) {
+    if (!musicCue) return;
+    musicCue.hidden = false;
+    if (musicCueLabel) musicCueLabel.textContent = showLink ? "Réessayer la musique" : "Activer la musique";
+    if (musicCueLink) musicCueLink.hidden = !showLink;
+    if (musicCueStatus && message) musicCueStatus.textContent = message;
+  }
+
+  function hideMusicCue() {
+    if (!musicCue) return;
+    musicCue.hidden = true;
+  }
+
+  function setCueBusy(busy) {
+    if (!enableMusic) return;
+    enableMusic.disabled = busy;
+    if (busy) enableMusic.setAttribute("aria-busy", "true");
+    else enableMusic.removeAttribute("aria-busy");
+  }
+
+  // The IFrame API is loaded during page initialisation. Loading it does not
+  // make a sound: playback is a separate, single attempt made once the player
+  // is ready. That attempt is still subject to the browser autoplay policy.
   function loadMusicApi() {
-    if (music.apiLoading || music.apiReady) return;
+    if (music.apiLoading) return;
+    if (window.YT && typeof window.YT.Player === "function") {
+      music.apiReady = true;
+      buildPlayer();
+      return;
+    }
     music.apiLoading = true;
     window.onYouTubeIframeAPIReady = () => {
       music.apiReady = true;
+      music.apiLoading = false;
       buildPlayer();
     };
     const tag = document.createElement("script");
@@ -812,34 +860,60 @@
     tag.async = true;
     tag.src = "https://www.youtube.com/iframe_api";
     tag.addEventListener("error", () => {
+      music.apiLoading = false;
+      music.starting = false;
+      music.playing = false;
       music.failed = true;
+      clearPlaybackWatchdog();
       reflectMusic();
       setMusicStatus("La musique n'a pas pu être chargée. Ouvrez la vidéo sur YouTube.");
+      setCueBusy(false);
+      showMusicCue("La musique n'a pas pu être chargée. Ouvrez la vidéo sur YouTube.", true);
     });
     document.head.appendChild(tag);
   }
 
+  function allowHiddenPlayerAutoplay() {
+    const frame = music.player && typeof music.player.getIframe === "function"
+      ? music.player.getIframe()
+      : (playerMount && (playerMount.matches("iframe") ? playerMount : playerMount.querySelector("iframe")));
+    if (!frame) return;
+    frame.setAttribute("tabindex", "-1");
+    const allow = frame.getAttribute("allow") || "";
+    if (!/(^|;|\s)autoplay(\s|;|$)/i.test(allow)) {
+      frame.setAttribute("allow", `${allow ? `${allow}; ` : ""}autoplay`);
+    }
+  }
+
   function buildPlayer() {
     if (music.player || !music.apiReady || !window.YT || !window.YT.Player) return;
-    music.player = new window.YT.Player(playerMount, {
-      videoId: VIDEO_ID,
-      playerVars: {
-        autoplay: 0,
-        controls: 0,
-        disablekb: 1,
-        fs: 0,
-        iv_load_policy: 3,
-        modestbranding: 1,
-        playsinline: 1,
-        rel: 0,
-        origin: window.location.origin
-      },
-      events: {
-        onReady: onPlayerReady,
-        onStateChange: onPlayerStateChange,
-        onError: onPlayerError
-      }
-    });
+    try {
+      music.player = new window.YT.Player(playerMount, {
+        videoId: VIDEO_ID,
+        playerVars: {
+          autoplay: 0,
+          controls: 0,
+          disablekb: 1,
+          fs: 0,
+          iv_load_policy: 3,
+          modestbranding: 1,
+          mute: 0,
+          playsinline: 1,
+          rel: 0,
+          origin: window.location.origin
+        },
+        events: {
+          onReady: onPlayerReady,
+          onStateChange: onPlayerStateChange,
+          onError: onPlayerError
+        }
+      });
+    } catch (error) {
+      music.player = null;
+      onPlayerError();
+      return;
+    }
+    allowHiddenPlayerAutoplay();
   }
 
   // The requested default loudness. Applied on ready and again immediately
@@ -854,74 +928,225 @@
     }
   }
 
+  function playerMuted() {
+    if (!music.player || typeof music.player.isMuted !== "function") return false;
+    try {
+      return music.player.isMuted();
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function safeUnmute() {
+    if (!music.player || typeof music.player.unMute !== "function") return;
+    try {
+      music.player.unMute();
+    } catch (error) {
+      // The player-state watchdog will report the failure honestly.
+    }
+  }
+
+  function safePause() {
+    if (!music.player || typeof music.player.pauseVideo !== "function") return;
+    try {
+      music.player.pauseVideo();
+    } catch (error) {
+      // Pausing is best-effort; it must not throw out of an event handler.
+    }
+  }
+
+  function clearPlaybackWatchdog() {
+    if (music.watchdog) {
+      window.clearTimeout(music.watchdog);
+      music.watchdog = 0;
+    }
+  }
+
+  function armPlaybackWatchdog(userInitiated) {
+    clearPlaybackWatchdog();
+    const token = ++music.attemptToken;
+    music.watchdog = window.setTimeout(() => {
+      music.watchdog = 0;
+      if (token !== music.attemptToken) return;
+      if (music.playing && !playerMuted()) return;
+      if (userInitiated) {
+        markPlaybackFailure("La musique n'a pas pu démarrer. Activez-la à nouveau ou ouvrez la vidéo sur YouTube.");
+      } else {
+        markAutoplayBlocked();
+      }
+    }, AUTOPLAY_WATCHDOG_MS);
+  }
+
+  function markAutoplayBlocked() {
+    music.playing = false;
+    music.starting = false;
+    music.autoplayPending = false;
+    music.blocked = true;
+    music.failed = false;
+    clearPlaybackWatchdog();
+    stopProgressPolling();
+    safePause();
+    setMusicStatus("La lecture automatique est bloquée. Activez la musique.");
+    reflectMusic();
+    setCueBusy(false);
+    showMusicCue("La lecture automatique est bloquée. Activez la musique.", false);
+  }
+
+  function markPlaybackFailure(message) {
+    music.playing = false;
+    music.starting = false;
+    music.autoplayPending = false;
+    music.blocked = false;
+    music.failed = true;
+    clearPlaybackWatchdog();
+    stopProgressPolling();
+    safePause();
+    setMusicStatus(message);
+    reflectMusic();
+    setCueBusy(false);
+    showMusicCue(message, true);
+  }
+
   function onPlayerReady() {
     music.ready = true;
     applyVolume();
-    if (music.wanted) startPlayback();
+    allowHiddenPlayerAutoplay();
+    if (music.wanted) startPlayback(music.userInitiated);
   }
 
-  function startPlayback() {
+  function startPlayback(userInitiated) {
     music.wanted = true;
+    if (music.playing) {
+      if (userInitiated) setCueBusy(false);
+      hideMusicCue();
+      return;
+    }
+    if (music.starting) return;
     if (!music.apiReady) {
+      if (userInitiated) setCueBusy(true);
       loadMusicApi();
       setMusicStatus("Chargement de la musique…");
       return;
     }
     if (!music.ready || !music.player) {
+      if (userInitiated) setCueBusy(true);
       setMusicStatus("Chargement de la musique…");
       return;
     }
-    applyVolume();                       // before the first audible frame
+    if (!userInitiated && music.autoplayAttempted) return;
+
+    if (userInitiated) {
+      music.userInitiated = true;
+      music.blocked = false;
+      music.failed = false;
+      music.autoplayPending = false;
+      clearPlaybackWatchdog();
+    } else {
+      music.autoplayAttempted = true;
+    }
+    music.starting = true;
+    music.autoplayPending = !userInitiated;
+    if (!userInitiated) applyVolume();   // before the first automatic sound
     try {
-      if (typeof music.player.unMute === "function") music.player.unMute();
+      // Keep the user gesture as close to playVideo() as possible. Some
+      // Chromium policies are sensitive to work done before this call.
       music.player.playVideo();
+      if (userInitiated) {
+        applyVolume();                   // immediately after the start call
+        setCueBusy(true);
+      }
+      if (playerMuted()) safeUnmute();
     } catch (error) {
+      music.starting = false;
       onPlayerError();
       return;
     }
-    music.started = true;
-    music.failed = false;
-    setMusicStatus("Lecture en cours…");
+    music.attempts += 1;
+    setMusicStatus("Chargement de la musique…");
     reflectMusic();
+    armPlaybackWatchdog(userInitiated);
   }
 
   function onPlayerStateChange(event) {
     const status = event && typeof event.data === "number" ? event.data : YT_CUED;
     if (status === YT_PLAYING) {
+      // YouTube can start a policy-blocked autoplay in a muted state. That is
+      // not audible playback: try one unmute, and otherwise pause and show the
+      // truthful activation control instead of claiming the music is playing.
+      if (playerMuted()) {
+        safeUnmute();
+        if (playerMuted()) {
+          if (music.userInitiated) {
+            markPlaybackFailure("La musique reste bloquée en mode muet. Ouvrez la vidéo sur YouTube.");
+          } else {
+            markAutoplayBlocked();
+          }
+          return;
+        }
+      }
       music.playing = true;
+      music.starting = false;
       music.started = true;
+      music.autoplayPending = false;
+      music.blocked = false;
       music.failed = false;
+      clearPlaybackWatchdog();
+      hideMusicCue();
+      setCueBusy(false);
       setMusicStatus("Lecture en cours.");
       reflectMusic();
       startProgressPolling();
     } else if (status === YT_PAUSED) {
+      if (music.blocked && !music.userInitiated) return;
       music.playing = false;
+      music.starting = false;
+      if (music.autoplayPending) {
+        markAutoplayBlocked();
+        return;
+      }
+      if (!music.started) {
+        // A first user-initiated start can pause while the stream negotiates.
+        // Do not call that "En pause." before any sound has played.
+        setMusicStatus("Chargement de la musique…");
+        return;
+      }
       setMusicStatus("En pause.");
       reflectMusic();
       stopProgressPolling();
       updateProgress();
     } else if (status === YT_ENDED) {
       music.playing = false;
+      music.starting = false;
+      music.autoplayPending = false;
+      clearPlaybackWatchdog();
       setMusicStatus("Lecture terminée.");
       reflectMusic();
       stopProgressPolling();
       updateProgress();
     } else if (status === YT_BUFFERING) {
-      if (music.wanted) setMusicStatus("Chargement de la musique…");
+      if (music.wanted && !music.blocked) setMusicStatus("Chargement de la musique…");
+    } else if (status === YT_UNSTARTED || status === YT_CUED) {
+      if (music.wanted && !music.blocked) setMusicStatus("Chargement de la musique…");
     }
   }
 
   function onPlayerError() {
     music.playing = false;
+    music.starting = false;
+    music.autoplayPending = false;
+    music.blocked = false;
     music.failed = true;
+    clearPlaybackWatchdog();
     reflectMusic();
     stopProgressPolling();
     musicProgress.hidden = true;
     setMusicStatus("La lecture est bloquée. Ouvrez la vidéo sur YouTube.");
+    setCueBusy(false);
+    showMusicCue("La lecture est bloquée. Ouvrez la vidéo sur YouTube.", true);
   }
 
   function startProgressPolling() {
-    if (music.poll) return;
+    if (music.poll || !dialog.open) return;
     music.poll = window.setInterval(updateProgress, 500);
     updateProgress();
   }
@@ -945,6 +1170,7 @@
   }
 
   function toggleMusic() {
+    music.userInitiated = true;
     if (music.playing) {
       try {
         music.player.pauseVideo();
@@ -953,16 +1179,37 @@
       }
       return;
     }
-    startPlayback();
+    startPlayback(true);
   }
 
   musicToggle.addEventListener("click", toggleMusic);
+
+  if (enableMusic) {
+    enableMusic.addEventListener("click", () => {
+      // This is the genuine user gesture that resolves an autoplay refusal.
+      // It is the only manual retry; there is no automatic retry loop.
+      startPlayback(true);
+    });
+  }
+
+  function beginAutoplay() {
+    music.wanted = true;
+    setMusicStatus("Chargement de la musique…");
+    loadMusicApi();
+  }
 
   // Read-only hook so the automated checks can assert the real player state.
   window.__roseMusic = {
     isReady: () => music.ready,
     volume: () => (music.player && typeof music.player.getVolume === "function" ? music.player.getVolume() : null),
-    playerState: () => (music.player && typeof music.player.getPlayerState === "function" ? music.player.getPlayerState() : null)
+    playerState: () => (music.player && typeof music.player.getPlayerState === "function" ? music.player.getPlayerState() : null),
+    isMuted: () => playerMuted(),
+    blocked: () => music.blocked,
+    cueVisible: () => !!(musicCue && !musicCue.hidden),
+    attempts: () => music.attempts,
+    status: () => (musicStatus ? musicStatus.textContent : ""),
+    currentTime: () => (music.player && typeof music.player.getCurrentTime === "function" ? music.player.getCurrentTime() : null),
+    duration: () => (music.player && typeof music.player.getDuration === "function" ? music.player.getDuration() : null)
   };
 
   /* --- Answer verification ----------------------------------------------- */
@@ -1153,7 +1400,11 @@
   // No petal state or progress is written to storage, cookies, the URL or a
   // backend. A bfcache restoration is forced back through a fresh load so a
   // returning recipient cannot inherit an already-opened flower.
-  window.addEventListener("pagehide", stopAutoBloom);
+  window.addEventListener("pagehide", () => {
+    stopAutoBloom();
+    clearPlaybackWatchdog();
+    stopProgressPolling();
+  });
   window.addEventListener("pageshow", (event) => {
     if (event.persisted) {
       stopAutoBloom();
@@ -1172,6 +1423,12 @@
       }
     });
   }
+
+  // The soundtrack is attempted independently of the rose: the player starts
+  // loading now, and the single audible-autoplay attempt happens as soon as it
+  // is ready. A refused attempt leaves the rose untouched and reveals the
+  // activation control; it never loops or retries by itself.
+  beginAutoplay();
 
   // Automatic blooming is not optional and starts only after every petal has
   // been generated in the closed state. The first automatic petal is selected

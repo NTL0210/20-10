@@ -1054,21 +1054,110 @@ body.is-dialog-open { overflow: hidden; }
 }
 .music__link:hover { color: var(--burgundy); }
 .music__link:focus-visible { outline: 1px solid var(--gold); outline-offset: 3px; }
-/* Kept in the layout (an iframe will not play when display:none) but removed
-   from view, so the soundtrack reads as audio rather than video. */
+/* The IFrame API replaces #playerMount with its iframe. Keep that node rendered
+   (an iframe will not play when display:none) but effectively out of view, so
+   the soundtrack reads as audio rather than video. */
 .music__player {
-  position: absolute;
+  position: fixed;
+  top: 0;
+  left: 0;
   width: 1px;
   height: 1px;
   overflow: hidden;
-  clip: rect(0 0 0 0);
-  clip-path: inset(50%);
   opacity: 0.01;
   pointer-events: none;
 }
-.music__player iframe {
-  display: block;
-  border: 0;
+
+/* A single, quiet fallback shown only when the browser refuses audible
+   autoplay. It sits outside the sheet flow so its arrival cannot move the
+   rose, the progress ruler or the letter. */
+.music-cue {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  right: max(20px, env(safe-area-inset-right));
+  bottom: max(20px, env(safe-area-inset-bottom));
+  z-index: 7;
+  max-width: calc(100vw - 40px);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+.music-cue[hidden] { display: none; }
+.music-cue__button {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  max-width: 100%;
+  padding: 9px 15px 9px 12px;
+  border: 1px solid var(--gold-line);
+  border-radius: 999px;
+  background: rgba(251, 246, 236, 0.92);
+  color: var(--burgundy);
+  font-family: var(--display);
+  font-size: 0.82rem;
+  font-style: italic;
+  letter-spacing: 0.015em;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(76, 19, 34, 0.08);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  transition: border-color 0.25s ease, color 0.25s ease, background-color 0.25s ease;
+}
+.music-cue__button:hover {
+  border-color: var(--gold);
+  background: var(--ivory-high);
+  color: var(--burgundy-deep);
+}
+.music-cue__button:focus-visible {
+  outline: 1px solid var(--gold);
+  outline-offset: 4px;
+}
+.music-cue__button[disabled] {
+  cursor: wait;
+  opacity: 0.7;
+}
+.music-cue__glyph {
+  display: inline-flex;
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+  color: var(--gold);
+}
+.music-cue__glyph svg {
+  width: 100%;
+  height: 100%;
+  fill: currentColor;
+}
+.music-cue__link {
+  padding-bottom: 2px;
+  border-bottom: 1px solid var(--hairline);
+  color: var(--green);
+  font-family: var(--body);
+  font-size: 0.56rem;
+  letter-spacing: 0.14em;
+  line-height: 1.4;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+.music-cue__link:hover { color: var(--burgundy); }
+.music-cue__link:focus-visible { outline: 1px solid var(--gold); outline-offset: 3px; }
+.music-cue__link[hidden] { display: none; }
+body.is-dialog-open .music-cue { display: none; }
+@media (max-width: 520px) {
+  .music-cue {
+    right: 14px;
+    bottom: 14px;
+    right: max(14px, env(safe-area-inset-right));
+    bottom: max(14px, env(safe-area-inset-bottom));
+    max-width: calc(100vw - 28px);
+  }
+  .music-cue__button {
+    padding: 9px 13px 9px 11px;
+    font-size: 0.78rem;
+  }
 }
 @keyframes wave {
   0%, 100% { height: 4px; }
