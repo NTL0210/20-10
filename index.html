@@ -50,110 +50,58 @@
                   <stop offset=".6" stop-color="#67745f"/>
                   <stop offset="1" stop-color="#505d4b"/>
                 </linearGradient>
-                <linearGradient id="petalShade" x1=".5" y1="1" x2=".5" y2="0">
-                  <stop offset="0" stop-color="#21030b" stop-opacity=".44"/>
-                  <stop offset=".18" stop-color="#2a0410" stop-opacity=".23"/>
-                  <stop offset=".5" stop-color="#2a0410" stop-opacity=".035"/>
-                  <stop offset=".78" stop-color="#2a0410" stop-opacity="0"/>
-                  <stop offset=".94" stop-color="#ffd2bf" stop-opacity=".055"/>
-                  <stop offset="1" stop-color="#3a0613" stop-opacity=".09"/>
+                <!-- Shading for a single petal, in the petal's own frame.
+                     Offset 0 is the rim, offset 1 the claw at the base:
+                     the base is buried in the flower and reads as occlusion,
+                     the rim catches a little warm light. -->
+                <linearGradient id="petalShade" x1=".5" y1="0" x2=".5" y2="1">
+                  <stop offset="0" stop-color="#ffe2d0" stop-opacity=".22"/>
+                  <stop offset=".16" stop-color="#ffd2be" stop-opacity=".07"/>
+                  <stop offset=".42" stop-color="#26040e" stop-opacity="0"/>
+                  <stop offset=".68" stop-color="#22030c" stop-opacity=".18"/>
+                  <stop offset=".87" stop-color="#1c020a" stop-opacity=".40"/>
+                  <stop offset="1" stop-color="#160208" stop-opacity=".60"/>
                 </linearGradient>
-                <linearGradient id="petalRoll" x1="0" y1="0" x2="1" y2="0">
-                  <stop offset="0" stop-color="#180207" stop-opacity=".29"/>
-                  <stop offset=".16" stop-color="#180207" stop-opacity=".075"/>
-                  <stop offset=".38" stop-color="#180207" stop-opacity="0"/>
-                  <stop offset=".62" stop-color="#180207" stop-opacity="0"/>
-                  <stop offset=".84" stop-color="#180207" stop-opacity=".075"/>
-                  <stop offset="1" stop-color="#180207" stop-opacity=".27"/>
+                <!-- One light for the whole bloom, in flower space. Every petal
+                     is washed with the same upper-left light, so the flower
+                     reads as a single body rather than 101 separate objects. -->
+                <linearGradient id="petalWash" gradientUnits="userSpaceOnUse"
+                                x1="-330" y1="-330" x2="330" y2="330">
+                  <stop offset="0" stop-color="#ffeede" stop-opacity=".20"/>
+                  <stop offset=".28" stop-color="#ffd8c6" stop-opacity=".05"/>
+                  <stop offset=".5" stop-color="#ffd8c6" stop-opacity="0"/>
+                  <stop offset=".76" stop-color="#20030d" stop-opacity=".14"/>
+                  <stop offset="1" stop-color="#180209" stop-opacity=".30"/>
                 </linearGradient>
-                <radialGradient id="petalLight" cx=".32" cy=".23" r=".72">
-                  <stop offset="0" stop-color="#ffcfb4" stop-opacity=".29"/>
-                  <stop offset=".32" stop-color="#ffb99c" stop-opacity=".12"/>
-                  <stop offset=".68" stop-color="#ffb99c" stop-opacity="0"/>
-                  <stop offset="1" stop-color="#2c0410" stop-opacity=".16"/>
+                <!-- A soft warm light along the outer edge of each petal.
+                     No hard outline: the stroke fades away towards the claw. -->
+                <linearGradient id="petalRim" x1=".5" y1="0" x2=".5" y2="1">
+                  <stop offset="0" stop-color="#ffe0ce" stop-opacity=".13"/>
+                  <stop offset=".22" stop-color="#ffd2be" stop-opacity=".05"/>
+                  <stop offset=".6" stop-color="#ffc8b4" stop-opacity=".012"/>
+                  <stop offset="1" stop-color="#ffc8b4" stop-opacity="0"/>
+                </linearGradient>
+                <!-- Contact shadow cast by one petal onto the one below it.
+                     It is darkest at the claw and dissolves towards the rim,
+                     so the overlap reads as depth rather than as an outline. -->
+                <linearGradient id="petalShadow" x1=".5" y1="1" x2=".5" y2="0">
+                  <stop offset="0" stop-color="#170208" stop-opacity=".40"/>
+                  <stop offset=".4" stop-color="#170208" stop-opacity=".22"/>
+                  <stop offset=".8" stop-color="#170208" stop-opacity=".05"/>
+                  <stop offset="1" stop-color="#170208" stop-opacity="0"/>
+                </linearGradient>
+                <!-- The throat of the flower, seen between the folded petals. -->
+                <radialGradient id="throatGrad" cx=".5" cy=".5" r=".5">
+                  <stop offset="0" stop-color="#250410"/>
+                  <stop offset=".62" stop-color="#3d0715"/>
+                  <stop offset="1" stop-color="#57101f"/>
                 </radialGradient>
-                <linearGradient id="petalRim" x1="0" y1="1" x2="0" y2="0">
-                  <stop offset="0" stop-color="#ffd6bf" stop-opacity="0"/>
-                  <stop offset=".66" stop-color="#ffd6bf" stop-opacity="0"/>
-                  <stop offset=".91" stop-color="#ffbfa3" stop-opacity=".10"/>
-                  <stop offset="1" stop-color="#ffd6bf" stop-opacity=".15"/>
-                </linearGradient>
-                <linearGradient id="petalEdgeLight" x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0" stop-color="#ffc5a6" stop-opacity=".24"/>
-                  <stop offset=".34" stop-color="#ffc5a6" stop-opacity=".075"/>
-                  <stop offset=".6" stop-color="#ffc5a6" stop-opacity="0"/>
-                  <stop offset="1" stop-color="#ffc5a6" stop-opacity="0"/>
-                </linearGradient>
-                <linearGradient id="reliefLight" x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0" stop-color="#fff7ea" stop-opacity=".52"/>
-                  <stop offset=".32" stop-color="#ffeeda" stop-opacity=".17"/>
-                  <stop offset=".62" stop-color="#ffeeda" stop-opacity="0"/>
-                  <stop offset="1" stop-color="#140005" stop-opacity=".40"/>
-                </linearGradient>
-                <linearGradient id="petalInnerLight" x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0" stop-color="#ffd0b4" stop-opacity=".34"/>
-                  <stop offset=".34" stop-color="#ffc2a2" stop-opacity=".12"/>
-                  <stop offset=".6" stop-color="#ffc2a2" stop-opacity="0"/>
-                  <stop offset="1" stop-color="#ffc2a2" stop-opacity="0"/>
-                </linearGradient>
-                <linearGradient id="petalInnerShade" x1=".5" y1="1" x2=".5" y2="0">
-                  <stop offset="0" stop-color="#1f020a" stop-opacity=".38"/>
-                  <stop offset=".35" stop-color="#1f020a" stop-opacity=".20"/>
-                  <stop offset=".72" stop-color="#1f020a" stop-opacity=".04"/>
-                  <stop offset="1" stop-color="#1f020a" stop-opacity="0"/>
-                </linearGradient>
-                <clipPath id="flowerClip" clipPathUnits="userSpaceOnUse"></clipPath>
-                <radialGradient id="flowerCore" cx=".5" cy=".48" r=".5">
-                  <stop offset="0" stop-color="#23030c" stop-opacity=".25"/>
-                  <stop offset=".6" stop-color="#23030c" stop-opacity=".08"/>
-                  <stop offset="1" stop-color="#23030c" stop-opacity="0"/>
-                </radialGradient>
-                <linearGradient id="flowerShade" x1=".16" y1=".04" x2=".84" y2="1">
-                  <stop offset="0" stop-color="#22040d" stop-opacity="0"/>
-                  <stop offset=".48" stop-color="#22040d" stop-opacity=".07"/>
-                  <stop offset=".8" stop-color="#1b0208" stop-opacity=".21"/>
-                  <stop offset="1" stop-color="#1b0208" stop-opacity=".32"/>
-                </linearGradient>
-                <radialGradient id="flowerLight" cx=".3" cy=".2" r=".62">
-                  <stop offset="0" stop-color="#fff4e3" stop-opacity=".30"/>
-                  <stop offset=".45" stop-color="#ffe0c5" stop-opacity=".10"/>
-                  <stop offset="1" stop-color="#ffe0c5" stop-opacity="0"/>
-                </radialGradient>
-                <radialGradient id="heartGrad" cx=".5" cy=".5" r=".5">
-                  <stop offset="0" stop-color="#2c050f"/>
-                  <stop offset=".7" stop-color="#410713"/>
-                  <stop offset="1" stop-color="#550d1c"/>
-                </radialGradient>
-                <radialGradient id="groundGlow" cx=".5" cy=".5" r=".5">
-                  <stop offset="0" stop-color="#4e1422" stop-opacity=".16"/>
-                  <stop offset=".68" stop-color="#4e1422" stop-opacity=".055"/>
-                  <stop offset="1" stop-color="#4e1422" stop-opacity="0"/>
-                </radialGradient>
-                <filter id="petalSoft" x="-30%" y="-30%" width="160%" height="160%">
-                  <feGaussianBlur stdDeviation="5.5"/>
-                </filter>
-                <filter id="petalInnerSoft" x="-20%" y="-20%" width="140%" height="140%">
-                  <feGaussianBlur stdDeviation="3.6"/>
-                </filter>
-                <filter id="bloomShadow" x="-24%" y="-24%" width="148%" height="148%" color-interpolation-filters="sRGB">
-                  <feTurbulence type="fractalNoise" baseFrequency="0.018 0.026" numOctaves="2" seed="9" result="warpNoise"/>
-                  <feDisplacementMap in="SourceGraphic" in2="warpNoise" scale="4.5" xChannelSelector="R" yChannelSelector="G" result="warped"/>
-                  <feGaussianBlur in="warped" stdDeviation="0.38" result="softened"/>
-                  <feTurbulence type="fractalNoise" baseFrequency="0.009 0.013" numOctaves="3" seed="31" result="mottleNoise"/>
-                  <feColorMatrix in="mottleNoise" type="saturate" values="0" result="mottleMono"/>
-                  <feComponentTransfer in="mottleMono" result="mottle">
-                    <feFuncA type="linear" slope="0.11"/>
-                  </feComponentTransfer>
-                  <feComposite in="mottle" in2="softened" operator="in" result="mottleOnFlower"/>
-                  <feBlend in="softened" in2="mottleOnFlower" mode="soft-light" result="mottled"/>
-                  <feTurbulence type="fractalNoise" baseFrequency="0.86" numOctaves="2" seed="23" result="grainNoise"/>
-                  <feColorMatrix in="grainNoise" type="saturate" values="0" result="grainMono"/>
-                  <feComponentTransfer in="grainMono" result="grain">
-                    <feFuncA type="linear" slope="0.20"/>
-                  </feComponentTransfer>
-                  <feComposite in="grain" in2="mottled" operator="in" result="grainOnFlower"/>
-                  <feBlend in="mottled" in2="grainOnFlower" mode="soft-light" result="textured"/>
-                  <feDropShadow in="textured" dx="9" dy="17" stdDeviation="15" flood-color="#45101f" flood-opacity=".20"/>
+                <!-- A single drop shadow for the whole bloom. One filter for
+                     the entire flower is dramatically cheaper than one blur
+                     per petal, and it grounds the rose on the paper. -->
+                <filter id="bloomShadow" x="-20%" y="-20%" width="140%" height="140%"
+                        color-interpolation-filters="sRGB">
+                  <feDropShadow dx="7" dy="15" stdDeviation="12" flood-color="#45101f" flood-opacity=".22"/>
                 </filter>
               </defs>
 
@@ -195,18 +143,9 @@
               </g>
 
               <g class="rose__flower" id="flower" transform="translate(500 400)">
-                <ellipse class="rose__ground" cx="24" cy="168" rx="300" ry="158" fill="url(#groundGlow)"/>
-                <circle class="rose__heart" cx="0" cy="0" r="28" fill="url(#heartGrad)"/>
-                <circle class="rose__hit" data-rose-hit cx="0" cy="0" r="402" fill="transparent" pointer-events="all"/>
+                <circle class="rose__hit" data-rose-hit cx="0" cy="0" r="330" fill="transparent" pointer-events="all"/>
+                <circle class="rose__throat" cx="0" cy="0" r="34" fill="url(#throatGrad)" aria-hidden="true"/>
                 <g id="petals" class="petals" filter="url(#bloomShadow)"></g>
-                <g class="rose__relief" clip-path="url(#flowerClip)" aria-hidden="true" pointer-events="none">
-                  <rect x="-400" y="-400" width="800" height="800" fill="url(#reliefLight)"/>
-                </g>
-                <g class="rose__lighting" aria-hidden="true" pointer-events="none">
-                  <ellipse class="rose__core" cx="0" cy="-6" rx="118" ry="116" fill="url(#flowerCore)"/>
-                  <ellipse class="rose__shade" cx="26" cy="34" rx="402" ry="394" fill="url(#flowerShade)"/>
-                  <ellipse class="rose__light" cx="-44" cy="-74" rx="376" ry="356" fill="url(#flowerLight)"/>
-                </g>
               </g>
 
               <g class="botanical-notes" aria-hidden="true" lang="fr">
@@ -386,6 +325,7 @@
     </div>
   </dialog>
 
-  <script src="script.js"></script>
+  <script src="assets/rose.js" defer></script>
+  <script src="script.js" defer></script>
 </body>
 </html>

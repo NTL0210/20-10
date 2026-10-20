@@ -1,8 +1,8 @@
 # La rose aux cent une pétales
 
-An interactive greeting for Vietnamese Women's Day, 20 October. A closed,
-mathematically drawn rose opens itself one petal per second, while every
-unopened petal also responds immediately to a click. After the
+An interactive greeting for Vietnamese Women's Day, 20 October. An empty
+flower head fills itself, one petal per second, into a fully bloomed red rose,
+while every unopened petal also responds immediately to a click. After the
 hundred-and-first petal, the rose reveals a Vietnamese letter. A discreet inscription
 inside that letter opens a sealed French puzzle: two Vietnamese questions, a
 six-word sequence, and a final literary sentence. The whole experience is a
@@ -16,8 +16,11 @@ initialisation so the soundtrack can attempt to start with the page.
 .
 ├── index.html                 Page shell, SVG definitions, letter and dialog markup
 ├── styles.css                 Art direction, responsive rules, motion system
-├── script.js                  Rose generator, state machine, hashes, interactions
+├── script.js                  Rose renderer, bloom engine, state machine, music
+├── tools/
+│   └── build-rose.mjs         Offline generator for the flower geometry
 ├── assets/
+│   ├── rose.js                The 101 baked petals (generated, committed)
 │   ├── favicon.svg            Original rosette favicon
 │   └── fonts/                 Self-hosted Cormorant Garamond & Lora woff2 subsets
 │       ├── OFL-Cormorant-Garamond.txt
@@ -26,39 +29,53 @@ initialisation so the soundtrack can attempt to start with the page.
 ├── README.md
 └── .github/
     └── workflows/
-        └── deploy.yml         Optional GitHub Pages deployment
+        └── deploy.yml         GitHub Pages deployment
 ```
 
 The original creative brief is kept outside version control because it contains
 the puzzle answers; it is not part of the published artifact.
 
-The rose is generated at runtime in `script.js`. It is not a raster image and
-there are no pre-drawn petals. One hundred and one distinct `<g class="petal">`
-elements are built from a rose-specific construction:
+## The rose
 
-- **The petal.** A rose petal is not a daisy ray: it never narrows to a point.
-  Each petal rises from a broad claw, flares into soft shoulders and closes in a
-  tall, domed, faintly notched rim with two slow undulations rather than a row
-  of small ripples. The spine of the petal is curved and every petal sweeps the
-  same way, so the head wraps into one spiral instead of radiating. The outline
-  is sampled, fitted with Catmull-Rom Bézier segments and stored once as a
-  `<defs>` path referenced by `<use>` shading layers.
-- **The arrangement.** Petals are attached at the receptacle and placed on a
-  golden-angle spiral, with a short steady step for the first few so the folded
-  centre chains into a visible spiral roll. Radius, length, tilt and width carry
-  a strong gradient from a dense, crumpled, incurved centre to broad outer
-  petals; the outer third grows progressively, so the silhouette is made of
-  overlapping lobes rather than a handful of flat plates. Inner petals stay
-  foreshortened even when open, as if standing inside the cup, while outer
-  petals lie flat. Each petal has its own lean, curvature, curl, ruffle,
-  asymmetry, palette tint and light-facing tone; the centre is jittered harder
-  than the rim so it reads as folded cloth rather than a neat rosette.
-- **The light.** A rolled-edge gradient, a cupped face gradient, a base shadow
-  and a soft cast shadow sit under a global directional light across the whole
-  bloom. The cast shadow falls down and to the right, matching the upper-left
-  light, and stays low-contrast so petals read as overlapping surfaces rather
-  than cut paper. The lighting overlay fades in with the bloom; it has no
-  separate pulse or glow.
+The flower is **designed offline and baked into `assets/rose.js`** by
+`tools/build-rose.mjs`, then animated at runtime. The runtime never invents a
+petal: it reads the baked geometry, builds the DOM for it and unfolds it. This
+keeps the first paint cheap and means the final composition is fully
+reviewable before a single petal appears.
+
+```bash
+node tools/build-rose.mjs          # regenerate assets/rose.js
+node tools/build-rose.mjs --check  # fail if the baked file is stale (used by CI)
+```
+
+- **The arrangement.** All 101 petals sit on one **golden-angle spiral**
+  (137.508° apart), which is how a rose actually stacks its petals. Radius,
+  length, width, foreshortening, lean and swirl all carry a gradient from a
+  tight, folded heart to broad, reflexed guard petals. There are no concentric
+  rings: neighbouring petals never line up, so the bloom reads as one grown
+  spiral rather than a drawn rosette. Four petal archetypes (broad and round,
+  narrow and pointed, deeply ruffled, calm) keep neighbours from being the same
+  shape scaled up, and every petal carries its own length, width, lean, swirl,
+  rim tilt, asymmetry, ruffle depth and colour.
+- **The petal.** A garden-rose petal is a rounded fan, not a daisy ray: a narrow
+  claw at the base, shoulders that flare quickly, and a broad, softly domed rim
+  with a shallow notch and two long, slow undulations. The outline is sampled
+  and fitted with Catmull-Rom Bézier segments, then stored once as a `<defs>`
+  path.
+- **The light.** Each petal is painted as five cheap layers over that single
+  path — a solid body tone, an along-petal shade (dark at the buried claw,
+  warm at the rim), one **global** light wash shared by the whole flower in
+  flower space, a faint radial vein set, and a dissolving warm rim light. A
+  contact shadow, darkest at the claw and fading to nothing at the rim, gives
+  each petal real occlusion on the one beneath it. There is no hard outline
+  around any petal, and the only SVG filter in the whole page is a single
+  `feDropShadow` on the flower group.
+- **Performance.** The previous version used **two blur filters per petal plus
+  a turbulence/displacement filter on the whole flower**: 203 filter regions
+  re-rasterised on every animation frame. The new version uses one filter for
+  the entire bloom, which cut the worst-case frame time from 21.6 ms (p95 42.4,
+  max 84.8) to 6.1 ms (p95 6.2, max 6.5) and the SVG node count from 2 458 to
+  994.
 
 ### Motion design
 
@@ -69,16 +86,22 @@ pulse. Motion is reserved for state changes:
 - **Automatic bloom.** A single interval claims one closed petal per second,
   centre outward, and keeps running while the reader clicks. It never starts a
   petal twice, and it is cleared when the final petal finishes. If no closed
-  petals remain, its next tick stops it as well.
+  petals remain, its next tick stops it as well. The first reveal is scheduled
+  after the first paint, so a fresh visit really does show an empty head for
+  about a second.
 - **Manual petals.** Every closed petal is directly clickable and opens at once,
   without waiting for the next automatic tick. Clicking a petal that is already
   opening or open does nothing; it cannot restart the animation or change the
-  count. Automatic selection skips every petal that is already claimed.
-- **Petal animation.** One `requestAnimationFrame` tween per claimed petal,
-  470–720 ms, ease-in-out. The petal rotates outward from its wrapped closed
-  angle, expands and moves to its open radius; timing follows the petal's depth,
-  not a random dice roll. At reduced motion the same unfold runs over 120 ms,
-  linear, so the automatic cadence and clicks remain fully functional.
+  count. Automatic selection skips every petal that is already claimed. Both
+  paths go through one `openPetal()` function, so there is a single source of
+  truth.
+- **Petal animation.** One shared `requestAnimationFrame` loop drives every
+  petal that is currently opening; when nothing is animating the loop stops
+  completely, so the page never runs an idle animation. Each petal is
+  760–940 ms and unfolds by rotating out of its furled angle, widening,
+  unfurling and moving to its open radius. At reduced motion the petal settles
+  into its final pose at once, so the automatic cadence and clicks remain fully
+  functional.
 - **Petal state.** `closed` → `opening` → `open` is the single source of truth,
   mirrored in `data-state` and the `is-opening`/`is-open` classes. A petal is
   claimed exactly once. The counter and ruler represent **fully open** petals;
@@ -98,6 +121,49 @@ pulse. Motion is reserved for state changes:
   8 px rise; no particles, glow or zoom.
 - **Soundtrack.** The five-bar wave animates only while the player is actually
   playing. Hover states change colour, not position.
+
+## The soundtrack
+
+The music source is unchanged: <https://www.youtube.com/watch?v=cvamJ4oKBGY>,
+played through the official YouTube IFrame Player API at volume **35/100**.
+
+**What was actually wrong, and what was fixed**
+
+- The player used to be created *by* the YouTube API, which means the browser
+  only got to judge the autoplay permission after the ~1 s API script had
+  downloaded and parsed. The frame is now created by this page with
+  `enablejsapi=1&autoplay=1&playsinline=1` and `allow="autoplay; …"` already
+  in place, so the permission is evaluated at the earliest possible moment.
+- `setVolume(35)` is applied on the player's first ready event and again
+  immediately after every `playVideo()` call, so the very first sound is
+  already at the requested level.
+- `playVideo()` is called exactly once per gesture. The old code could issue
+  two calls for a single click (a document-level unlock plus the button's own
+  handler); asking the player to start twice in a row is one of the ways a
+  start request gets dropped.
+- The playback state is read from the player, never assumed. A muted start is
+  detected, unmuted once, and if it is still muted the site says so instead of
+  claiming the music is playing.
+
+**Measured behaviour** (Chromium, headless, on this page):
+
+| Chromium autoplay policy | Automatic attempt | After one click |
+| --- | --- | --- |
+| `no-user-gesture-required` | audible playback starts | keeps playing |
+| `document-user-activation-required` (**Chrome's real default**) | refused | **audible playback starts** |
+| `user-gesture-required` (artificial strictest flag) | refused | still refused |
+
+Chrome's real default policy refuses audible autoplay on a fresh origin but
+honours the parent frame's user gesture through `allow="autoplay"`, so the
+one-click fallback genuinely works there. The third row is Chromium's
+artificial strictest mode, which refuses even a gesture made in the parent
+frame; in that mode the site cannot start the audio and says so, offering the
+**Ouvrir sur YouTube** link instead. There is no retry loop in any case, and
+the rose keeps blooming regardless.
+
+The frame is 2×2 px and fully transparent but stays *rendered*: a `display:none`
+or zero-sized iframe does not play reliably. The video is never visible in the
+interface, and the audio is never re-hosted or extracted.
 
 ## Run locally
 
@@ -138,8 +204,7 @@ relative so the same files also work from a repository subpath.
    player node is never shown; the soundtrack is presented with a compact
    play/pause control, a live sound-wave indicator, a real playback status line,
    an honest progress line and the **Ouvrir sur YouTube** link. Reopening
-   reuses the same player.
-4. **Verification.** Both answers are normalised and checked as SHA-256 digests
+   reuses the same player.4. **Verification.** Both answers are normalised and checked as SHA-256 digests
    with the Web Crypto API. A partially correct submission preserves the
    correct field; both must pass to continue.
 5. **Sequence.** The button reads, in order, `Une` → `deux` → `trois` →
@@ -163,9 +228,11 @@ actually publishes the site.
 ### Option A — GitHub Actions (included)
 
 `.github/workflows/deploy.yml` runs on every push to `main` and can also be
-started manually. It stages only the files needed by the site
-(`index.html`, `styles.css`, `script.js`, and `assets/`) into `_site`, uploads
-that directory as a Pages artifact, and deploys it.
+started manually. It first verifies that the baked flower geometry still
+matches `tools/build-rose.mjs` and that `script.js` parses, then stages only
+the files needed by the site (`index.html`, `styles.css`, `script.js`, and
+`assets/`) into `_site`, uploads that directory as a Pages artifact, and
+deploys it.
 
 1. Push the project to the `main` branch.
 2. In **Settings → Pages → Build and deployment**, set **Source** to
@@ -196,12 +263,14 @@ After the first successful publish:
    missing asset.
 2. Check that the favicon and both typefaces load; Cormorant Garamond should
    appear in the heading and Lora in the body text.
-3. Confirm the closed flower reads as a rosebud. After one second, check that
-   exactly one petal unfolds; click another unopened petal and check that it
-   opens immediately while the automatic cadence continues. Reload and confirm
-   the counter returns to `00` with all petals closed.
-4. Open DevTools → **Network** and confirm `styles.css`, `script.js`, the woff2
-   files, and `assets/favicon.svg` all return `200` (not `404`).
+3. Confirm the flower head starts **empty** with the counter at `00 / 101`, and
+   that after about a second exactly one petal unfolds. Click another unopened
+   petal and check that it opens immediately while the automatic cadence
+   continues. Reload and confirm the counter returns to `00` with all petals
+   closed.
+4. Open DevTools → **Network** and confirm `styles.css`, `script.js`,
+   `assets/rose.js`, the woff2 files, and `assets/favicon.svg` all return `200`
+   (not `404`).
 5. Open DevTools → **Console** and confirm there are no errors.
 6. On load, confirm the soundtrack either starts at volume `35` without a click
    or that the discreet **Activer la musique** control appears. If it appears,

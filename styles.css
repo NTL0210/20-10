@@ -304,8 +304,8 @@ button { -webkit-tap-highlight-color: transparent; }
 .rose__svg .petal__blade { cursor: pointer; }
 /* A fresh flower head is genuinely empty: unopened petals exist as stable,
    individually addressable records, but they are not painted yet. Their
-   invisible blades still accept a direct click, and the central hit area
-   offers a forgiving fallback. */
+   blades still accept a direct click, and the central hit area offers a
+   forgiving fallback. */
 .rose__flower .petal { opacity: 0; }
 .rose__flower .petal[data-state="opening"],
 .rose__flower .petal[data-state="open"] { opacity: 1; }
@@ -313,6 +313,13 @@ button { -webkit-tap-highlight-color: transparent; }
 .rose__flower .petal[data-state="closed"] .petal__blade {
   pointer-events: all;
   cursor: pointer;
+}
+/* Opened petals are scenery: they must not swallow a click meant for a
+   petal that is still folded. */
+.rose__flower .petal[data-state="open"] .petal__blade,
+.rose__flower .petal[data-state="opening"] .petal__blade {
+  pointer-events: none;
+  cursor: default;
 }
 .rose[disabled] { cursor: default; }
 .rose[disabled] .rose__flower { cursor: default; }
@@ -1067,18 +1074,25 @@ body.is-dialog-open { overflow: hidden; }
 }
 .music__link:hover { color: var(--burgundy); }
 .music__link:focus-visible { outline: 1px solid var(--gold); outline-offset: 3px; }
-/* The IFrame API replaces #playerMount with its iframe. Keep that node rendered
-   (an iframe will not play when display:none) but effectively out of view, so
-   the soundtrack reads as audio rather than video. */
+/* The IFrame API takes over #playerMount. The frame must stay *rendered* —
+   a display:none or zero-size iframe does not play reliably — but it is kept
+   at 2x2 px and fully transparent, so the visitor only ever sees an audio
+   interface, never a video frame. */
 .music__player {
   position: fixed;
   top: 0;
   left: 0;
-  width: 1px;
-  height: 1px;
+  width: 2px;
+  height: 2px;
   overflow: hidden;
   opacity: 0.01;
   pointer-events: none;
+}
+.music__frame {
+  display: block;
+  width: 2px;
+  height: 2px;
+  border: 0;
 }
 
 /* A single, quiet fallback shown only when the browser refuses audible
@@ -1186,17 +1200,9 @@ body.is-dialog-open .music-cue { display: none; }
 @keyframes backdropIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes backdropOut { to { opacity: 0; } }
 
-.rose__lighting,
-.rose__ground,
-.rose__heart { pointer-events: none; opacity: 0; transition: opacity 0.5s ease; }
-/* Decorative layers never intercept a click; only petals and the hit area do. */
-.rose__core { mix-blend-mode: multiply; }
-.rose__relief { mix-blend-mode: soft-light; }
-/* A full-bleed ellipse of shadow/light would tint the paper behind the
-   flower and read as a grey plate. Depth belongs to the petals themselves. */
-.rose__ground,
-.rose__shade,
-.rose__light { display: none; }
+/* The throat of the flower only exists once the first petal has opened;
+   before that the head is genuinely empty. */
+.rose__throat { pointer-events: none; opacity: 0; transition: opacity 0.6s ease; }
 .sequence.is-leaving {
   opacity: 0;
   transition: opacity 0.2s ease;
