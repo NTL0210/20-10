@@ -786,6 +786,8 @@
     userInitiated: false,
     starting: false,
     watchdog: 0,
+    confirmTimer: 0,
+    clockAtStart: 0,
     bufferChecks: 0,
     attemptToken: 0
   };
@@ -866,6 +868,7 @@
       music.playing = false;
       music.failed = true;
       clearPlaybackWatchdog();
+      clearConfirmTimer();
       reflectMusic();
       setMusicStatus("La musique n'a pas pu être chargée. Ouvrez la vidéo sur YouTube.");
       setCueBusy(false);
@@ -981,6 +984,13 @@
     }
   }
 
+  function clearConfirmTimer() {
+    if (music.confirmTimer) {
+      window.clearTimeout(music.confirmTimer);
+      music.confirmTimer = 0;
+    }
+  }
+
   // Only silence a player that is demonstrably making sound (or trying to,
   // in a muted playing state). An unstarted or buffering player must be left
   // alone: pausing it would abort a slow but legitimate start.
@@ -1004,9 +1014,11 @@
         return;
       }
       // During some ad/stream transitions YouTube reports UNSTARTED or
-      // BUFFERING while the media clock is already running. A real current
-      // time is stronger evidence of playback than the transient state label.
-      if (!playerMuted() && playerCurrentTime() >= 0.75 &&
+      // BUFFERING while the media clock is already running. A clock that has
+      // moved since this attempt began is stronger evidence of playback than
+      // the transient state label (and does not mistake a paused position for
+      // a resumed stream).
+      if (!playerMuted() && playerCurrentTime() >= music.clockAtStart + 0.75 &&
           (currentState === YT_UNSTARTED || currentState === YT_BUFFERING)) {
         onPlayerStateChange({ data: YT_PLAYING });
         return;
@@ -1034,6 +1046,7 @@
     music.blocked = true;
     music.failed = false;
     clearPlaybackWatchdog();
+    clearConfirmTimer();
     stopProgressPolling();
     pauseAudiblePlayback();
     setMusicStatus("La lecture automatique est bloquée. Activez la musique.");
@@ -1049,6 +1062,7 @@
     music.blocked = false;
     music.failed = true;
     clearPlaybackWatchdog();
+    clearConfirmTimer();
     stopProgressPolling();
     pauseAudiblePlayback();
     setMusicStatus(message);
@@ -1094,6 +1108,8 @@
     } else {
       music.autoplayAttempted = true;
     }
+    clearConfirmTimer();
+    music.clockAtStart = playerCurrentTime();
     music.starting = true;
     music.autoplayPending = !userInitiated;
     if (!userInitiated) applyVolume();   // before the first automatic sound
@@ -1116,10 +1132,27 @@
     setMusicStatus("Chargement de la musique…");
     reflectMusic();
     armPlaybackWatchdog(userInitiated);
+
+    // A short confirmation window catches the common YouTube ad/stream glitch
+    // where the clock runs while getPlayerState() is still UNSTARTED. It only
+    // succeeds if the clock has actually advanced from this attempt's origin.
+    const startClock = music.clockAtStart;
+    music.confirmTimer = window.setTimeout(() => {
+      music.confirmTimer = 0;
+      if (!music.starting || music.playing) return;
+      const currentState = playerState();
+      if (currentState === YT_PAUSED || currentState === YT_ENDED) return;
+      if (!playerMuted() && playerCurrentTime() >= startClock + 0.3) {
+        onPlayerStateChange({ data: YT_PLAYING });
+      }
+    }, 900);
   }
 
   function onPlayerStateChange(event) {
     const status = event && typeof event.data === "number" ? event.data : YT_CUED;
+    if (status === YT_PLAYING || status === YT_PAUSED || status === YT_ENDED) {
+      clearConfirmTimer();
+    }
     if (status === YT_PLAYING) {
       // YouTube can start a policy-blocked autoplay in a muted state. That is
       // not audible playback: try one unmute, and otherwise pause and show the
@@ -1192,6 +1225,7 @@
     music.blocked = false;
     music.failed = true;
     clearPlaybackWatchdog();
+    clearConfirmTimer();
     reflectMusic();
     stopProgressPolling();
     musicProgress.hidden = true;
@@ -1235,6 +1269,7 @@
       }
       // Do not depend solely on a PAUSED event: during ad/stream transitions
       // YouTube can keep reporting a transient state even after pausing.
+      clearConfirmTimer();
       music.playing = false;
       music.starting = false;
       music.started = true;
@@ -1468,6 +1503,7 @@
   window.addEventListener("pagehide", () => {
     stopAutoBloom();
     clearPlaybackWatchdog();
+    clearConfirmTimer();
     stopProgressPolling();
   });
   window.addEventListener("pageshow", (event) => {
