@@ -1231,7 +1231,17 @@
         music.player.pauseVideo();
       } catch (error) {
         onPlayerError();
+        return;
       }
+      // Do not depend solely on a PAUSED event: during ad/stream transitions
+      // YouTube can keep reporting a transient state even after pausing.
+      music.playing = false;
+      music.starting = false;
+      music.started = true;
+      setMusicStatus("En pause.");
+      reflectMusic();
+      stopProgressPolling();
+      updateProgress();
       return;
     }
     startPlayback(true);
