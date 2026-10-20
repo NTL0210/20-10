@@ -549,7 +549,8 @@
      ====================================================================== */
   const VIDEO_ID = "cvamJ4oKBGY";
   const MUSIC_VOLUME = 35;
-  const AUTOPLAY_WATCHDOG_MS = 5200;
+  const START_WINDOW_MS = 7000;
+  const START_POLL_MS = 600;
   const YT_UNSTARTED = -1;
   const YT_ENDED = 0;
   const YT_PLAYING = 1;
@@ -584,6 +585,7 @@
     attempts: 0,
     lastPlayCall: 0,
     watchdog: 0,
+    watcher: 0,
     poll: 0,
     clockAtStart: 0
   };
@@ -642,6 +644,13 @@
     if (music.watchdog) {
       window.clearTimeout(music.watchdog);
       music.watchdog = 0;
+    }
+  }
+
+  function clearStartWatcher() {
+    if (music.watcher) {
+      window.clearInterval(music.watcher);
+      music.watcher = 0;
     }
   }
 
@@ -783,41 +792,74 @@
   }
 
   /* --- playback --------------------------------------------------------- */
-  function armPlaybackWatchdog() {
+  // Some YouTube streams never emit a PLAYING state event and keep
+  // reporting UNSTARTED while the media clock is already running — that is
+  // what happens on the live site. The clock is the honest evidence, so the
+  // start watcher trusts it and confirms playback within about a second
+  // instead of waiting for a state label that may never arrive.
+  function confirmPlaying() {
+    clearStartWatcher();
     clearPlaybackWatchdog();
-    music.watchdog = window.setTimeout(() => {
-      music.watchdog = 0;
-      if (music.playing) return;
+    music.playing = true;
+    music.starting = false;
+    music.started = true;
+    music.blocked = false;
+    music.failed = false;
+    hideMusicCue();
+    setCueBusy(false);
+    setMusicStatus("Lecture en cours.");
+    reflectMusic();
+    startProgressPolling();
+  }
+
+  function handleStartFailure() {
+    clearStartWatcher();
+    clearPlaybackWatchdog();
+    if (music.userInitiated) {
+      // The recipient already clicked "Activer la musique" and the player
+      // still refused. Say so, and give them the video link.
+      markPlaybackFailure("La musique n'a pas pu démarrer. Ouvrez la vidéo sur YouTube.");
+      return;
+    }
+    markAutoplayBlocked();
+  }
+
+  function armStartWatcher() {
+    clearStartWatcher();
+    const deadline = performance.now() + START_WINDOW_MS;
+    music.watcher = window.setInterval(() => {
       const state = playerState();
-      if (state === YT_PLAYING && !playerMuted()) {
-        onPlayerStateChange({ data: YT_PLAYING });
+      const advanced = playerCurrentTime() >= music.clockAtStart + 0.4;
+      if (state === YT_PLAYING || advanced) {
+        if (playerMuted()) {
+          // A muted start is not audible playback. Try once to unmute.
+          safeUnmute();
+          if (playerMuted()) {
+            handleStartFailure();
+            return;
+          }
+        }
+        confirmPlaying();
         return;
       }
-      if (!playerMuted() && playerCurrentTime() >= music.clockAtStart + 0.5 &&
-          (state === YT_UNSTARTED || state === YT_BUFFERING || state === YT_CUED)) {
-        onPlayerStateChange({ data: YT_PLAYING });
-        return;
+      if (performance.now() > deadline) {
+        if (state === YT_BUFFERING) {
+          // Buffering is progress, not a refusal: give it one more window.
+          armStartWatcher();
+          return;
+        }
+        handleStartFailure();
       }
-      if (state === YT_BUFFERING) {
-        // Buffering is progress, not a refusal: give it one more window.
-        armPlaybackWatchdog();
-        return;
-      }
-      if (music.userInitiated) {
-        // The recipient already clicked "Activer la musique" and the player
-        // still refused. Say so, and give them the video link.
-        markPlaybackFailure("La musique n'a pas pu démarrer. Ouvrez la vidéo sur YouTube.");
-        return;
-      }
-      markAutoplayBlocked();
-    }, AUTOPLAY_WATCHDOG_MS);
+    }, START_POLL_MS);
   }
 
   function markAutoplayBlocked() {
     music.playing = false;
+    music.starting = false;
     music.blocked = true;
     music.failed = false;
     clearPlaybackWatchdog();
+    clearStartWatcher();
     stopProgressPolling();
     if (playerMuted() || playerState() === YT_PLAYING) safePause();
     setMusicStatus("La lecture automatique est bloquée par le navigateur. Activez la musique.");
@@ -828,9 +870,11 @@
 
   function markPlaybackFailure(message) {
     music.playing = false;
+    music.starting = false;
     music.blocked = false;
     music.failed = true;
     clearPlaybackWatchdog();
+    clearStartWatcher();
     stopProgressPolling();
     if (playerMuted() || playerState() === YT_PLAYING) safePause();
     setMusicStatus(message);
@@ -885,11 +929,12 @@
       return;
     }
     music.attempts += 1;
+    music.starting = true;
     applyVolume();
     if (playerMuted()) safeUnmute();
     setMusicStatus("Chargement de la musique…");
     reflectMusic();
-    armPlaybackWatchdog();
+    armStartWatcher();
   }
 
   function onPlayerStateChange(event) {
@@ -900,20 +945,11 @@
       if (playerMuted()) {
         safeUnmute();
         if (playerMuted()) {
-          markAutoplayBlocked();
+          handleStartFailure();
           return;
         }
       }
-      music.playing = true;
-      music.started = true;
-      music.blocked = false;
-      music.failed = false;
-      clearPlaybackWatchdog();
-      hideMusicCue();
-      setCueBusy(false);
-      setMusicStatus("Lecture en cours.");
-      reflectMusic();
-      startProgressPolling();
+      confirmPlaying();
     } else if (status === YT_PAUSED) {
       music.playing = false;
       if (!music.started) {
@@ -942,9 +978,11 @@
 
   function onPlayerError() {
     music.playing = false;
+    music.starting = false;
     music.blocked = false;
     music.failed = true;
     clearPlaybackWatchdog();
+    clearStartWatcher();
     reflectMusic();
     stopProgressPolling();
     musicProgress.hidden = true;
@@ -1027,6 +1065,10 @@
     isReady: () => music.ready,
     volume: () => (music.player && typeof music.player.getVolume === "function" ? music.player.getVolume() : null),
     playerState: () => (music.player && typeof music.player.getPlayerState === "function" ? music.player.getPlayerState() : null),
+    // The truth the interface itself uses. Some YouTube streams keep
+    // reporting UNSTARTED while the media clock runs, so the raw state
+    // alone is not a reliable answer.
+    isPlaying: () => music.playing,
     isMuted: () => playerMuted(),
     blocked: () => music.blocked,
     failed: () => music.failed,
@@ -1230,6 +1272,7 @@
   window.addEventListener("pagehide", () => {
     stopAutoBloom();
     clearPlaybackWatchdog();
+    clearStartWatcher();
     stopProgressPolling();
   });
   window.addEventListener("pageshow", (event) => {
