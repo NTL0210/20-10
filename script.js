@@ -1019,7 +1019,7 @@
       // the transient state label (and does not mistake a paused position for
       // a resumed stream).
       if (!playerMuted() && playerCurrentTime() >= music.clockAtStart + 0.75 &&
-          (currentState === YT_UNSTARTED || currentState === YT_BUFFERING)) {
+          (currentState === YT_UNSTARTED || currentState === YT_BUFFERING || currentState === YT_CUED)) {
         onPlayerStateChange({ data: YT_PLAYING });
         return;
       }
