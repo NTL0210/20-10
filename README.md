@@ -33,16 +33,27 @@ the puzzle answers; it is not part of the published artifact.
 
 The rose is generated at runtime in `script.js`. It is not a raster image and
 there are no pre-drawn petals. One hundred and one distinct `<g class="petal">`
-elements are created on a golden-angle spiral. Each petal is a single smooth,
-closed ovoid path built from a parametric outline and fitted with Catmull-Rom
-Bézier segments, so it has a narrow base and a broad rounded apex and no
-angular corner anywhere. Every petal carries its own randomised outline, rim
-ruffle, lean, palette tint, opacity shading, vein and crease, plus its own
-closed/open transform, duration and opening state. A reusable `<defs>` outline
-is referenced by `<use>` shading layers, which keeps the DOM light. Soft
-contact shadows, a rounded apex and a set of directional-light overlays (whose
-scale and opacity follow the bloom) give the flower a hand-drawn botanical
-feel. A separate decorative knot at the centre is not counted as a petal.
+elements are built from a rose-specific construction:
+
+- **The petal.** A rose petal is not a daisy ray: it never narrows to a point.
+  Each petal rises from a narrow claw, flares into broad shoulders and closes in
+  a domed, faintly notched, softly waved rim. The spine of the petal is curved
+  and every petal sweeps the same way, so the head wraps into one spiral instead
+  of radiating. The outline is sampled, fitted with Catmull-Rom Bézier segments
+  and stored once as a `<defs>` path referenced by `<use>` shading layers.
+- **The arrangement.** Petals are attached at the receptacle and placed on a
+  golden-angle spiral, with a short steady step for the first few so the folded
+  centre chains into a visible spiral roll. Radius and length carry a strong
+  size gradient — a dense, crumpled, incurved centre and a handful of very large
+  outer petals — so the head never resolves into rings of similar-sized petals.
+  Each petal has its own lean, curvature, curl, ruffle, asymmetry and palette
+  tint; the centre is jittered harder than the rim so it reads as folded cloth
+  rather than a neat rosette.
+- **The light.** A rolled-edge gradient (shadow, then a bright rim, then a dark
+  folded edge), a cupped face gradient, a base shadow and a blurred cast shadow
+  sit under a global directional light across the whole bloom, whose scale and
+  opacity follow the bloom. A separate decorative knot at the centre is not
+  counted as a petal.
 
 ## Run locally
 

@@ -35,6 +35,18 @@
     };
   }
 
+  // Nudge a petal's colour towards white (amount > 0) or black (amount < 0).
+  function shadeHex(hex, amount) {
+    const n = parseInt(hex.slice(1), 16);
+    const r = (n >> 16) & 255;
+    const g = (n >> 8) & 255;
+    const b = n & 255;
+    const target = amount >= 0 ? 255 : 0;
+    const k = Math.min(1, Math.abs(amount));
+    const mix = (c) => Math.round(c + (target - c) * k);
+    return `rgb(${mix(r)} ${mix(g)} ${mix(b)})`;
+  }
+
   // Catmull-Rom through a closed loop of points, emitted as smooth cubic
   // Bézier segments. Every join keeps a continuous tangent, so the petal
   // outline has no angular corners anywhere.
@@ -60,44 +72,77 @@
     return out.join(" ");
   }
 
-  // A single rose petal, drawn as one smooth closed ovoid: narrow at the
-  // base, swelling toward a broad rounded apex. Sampled densely and fitted
-  // with Catmull-Rom, so there is no angular corner anywhere. Inner petals
-  // are more tapered; outer petals are broader with a ruffled rim. The base
-  // pointiness, the rim ruffle and a slight lean are all randomised.
-  function petalOutline(len, half, rand, ring) {
-    const t = ring / (RINGS.length - 1);
-    const q = lerp(0.4, 0.62, t) + (rand() - 0.5) * 0.08;
-    const lean = (rand() - 0.5) * 0.16;
-    const asym = (rand() - 0.5) * 0.13;
-    const ruffle = lerp(0.02, 0.05, t) * (0.6 + rand() * 0.8);
-    const freq = 2 + Math.floor(rand() * 3);
+  // A single rose petal. Unlike a daisy ray, a rose petal never narrows to a
+  // point: it rises from a narrow claw, flares into broad shoulders and closes
+  // in a domed, faintly notched, softly waved rim. The spine is *curved* and
+  // every petal sweeps the same way, so the head wraps into one spiral instead
+  // of radiating like a daisy. `curl` < 0 tucks the rim inwards (the tight
+  // folded centre); `curl` > 0 lets it fall open.
+  function petalOutline(len, half, rand, t, curl, bend) {
+    const lean = (rand() - 0.5) * 0.12;
+    const asym = (rand() - 0.5) * 0.2;
+    const ruffleAmp = lerp(0.06, 0.11, t) * (0.7 + rand() * 0.6);
+    const ruffleFreq = 1.7 + rand() * 1.3;
     const phase = rand() * Math.PI * 2;
+    const claw = lerp(0.18, 0.26, t) + rand() * 0.05;
+    const shoulder = 0.56 + (rand() - 0.5) * 0.09;
+    const notch = lerp(0.1, 0.04, t) + rand() * 0.03;
+    const p = lerp(0.5, 0.72, t) + (rand() - 0.5) * 0.14;
 
-    const points = [];
-    const steps = 24;
-    for (let i = 0; i <= steps; i += 1) {
-      const theta = (Math.PI * 2 * i) / steps;
-      const s = Math.sin(theta);
-      const c = Math.cos(theta);
-      const v = (1 - c) * 0.5;                 // 0 at base, 1 at apex
-      let w = half * s * Math.pow(v, q);
-      w *= 1 + ruffle * Math.sin(freq * theta + phase) * Math.abs(s);
-      if (s > 0) w *= 1 + asym;
-      const drift = lean * half * v;
-      points.push([w + drift, -len * v]);
+    const sweep = bend * half;
+    const spineX = (u) => sweep * u * u + lean * half * u;
+    const spineY = (u) => -len * u;
+    const tanX = (u) => 2 * sweep * u + lean * half;
+
+    const frame = (u) => {
+      const tx = tanX(u);
+      const tl = Math.hypot(tx, -len);
+      return { cx: spineX(u), cy: spineY(u), nx: len / tl, ny: tx / tl, ox: tx / tl, oy: -len / tl };
+    };
+
+    const pts = [[0, 0]];
+    const steps = 10;
+    const side = (u) => half * (claw + (1 - claw) * Math.sin(Math.PI * 0.5 * Math.pow(u / shoulder, p)));
+
+    for (let i = 1; i <= steps; i += 1) {
+      const u = (shoulder * i) / steps;
+      const w = side(u);
+      const f = frame(u);
+      pts.push([f.cx - w * f.nx, f.cy - w * f.ny]);
     }
-    return smoothClosedPath(points, 0.92);
+
+    const f = frame(shoulder);
+    // Reflexed outer petals flatten their dome; the incurved centre keeps a
+    // taller, more hooded rim.
+    const domeH = (1 - shoulder) * len * (1 - 0.12 * curl);
+    const rimSteps = 10;
+    for (let i = 1; i < rimSteps; i += 1) {
+      const a = (Math.PI * i) / rimSteps;
+      const wave = 1 + ruffleAmp * Math.sin(ruffleFreq * a * 2 + phase);
+      const halfEff = half * (1 + asym * (1 - Math.cos(a))) * wave;
+      const lat = -halfEff * Math.cos(a);
+      const out = domeH * Math.sin(a) * (1 - notch * Math.sin(a))
+        * (1 + ruffleAmp * 0.8 * Math.sin(ruffleFreq * a * 2 + phase + 1.3));
+      pts.push([f.cx + f.nx * lat + f.ox * out, f.cy + f.ny * lat + f.oy * out]);
+    }
+
+    for (let i = steps; i >= 1; i -= 1) {
+      const u = (shoulder * i) / steps;
+      const w = side(u) * (1 + asym);
+      const f2 = frame(u);
+      pts.push([f2.cx + w * f2.nx, f2.cy + w * f2.ny]);
+    }
+
+    return smoothClosedPath(pts, 0.85);
   }
 
-  function veinPath(len, half, rand, ring) {
-    const t = ring / (RINGS.length - 1);
+  function veinPath(len, half, rand) {
     const bend = (rand() - 0.5) * half * 0.3;
-    const top = -len * (0.7 + rand() * 0.16);
-    const mid = -len * (0.36 + rand() * 0.1);
+    const top = -len * (0.58 + rand() * 0.16);
+    const mid = -len * (0.28 + rand() * 0.1);
     return (
-      `M 0 ${(-len * 0.05).toFixed(2)} ` +
-      `C ${(half * 0.05).toFixed(2)} ${(-len * 0.19).toFixed(2)} ` +
+      `M 0 ${(-len * 0.1).toFixed(2)} ` +
+      `C ${(half * 0.05).toFixed(2)} ${(-len * 0.2).toFixed(2)} ` +
       `${(bend * 0.4).toFixed(2)} ${(mid).toFixed(2)} ${(bend * 0.85).toFixed(2)} ${(top * 0.92).toFixed(2)} ` +
       `S ${(bend * 1.05).toFixed(2)} ${(top * 0.99).toFixed(2)} ${(bend).toFixed(2)} ${(top).toFixed(2)}`
     );
@@ -136,34 +181,66 @@
   }
 
   const lerp = (a, b, t) => a + (b - a) * t;
+  const smoothstep = (a, b, x) => {
+    const u = Math.min(1, Math.max(0, (x - a) / (b - a)));
+    return u * u * (3 - 2 * u);
+  };
+
+  // Angular placement. The folded centre is laid down with a short, steady
+  // step so those petals chain into one visible spiral roll; further out the
+  // step opens onto the golden angle, which packs the broad petals evenly.
+  const angles = [];
+  let acc = 8;
+  for (let i = 0; i < TOTAL_PETALS; i += 1) {
+    acc += i < 10 ? 20.5 : 137.508;
+    angles.push(acc);
+  }
 
   for (let index = 0; index < TOTAL_PETALS; index += 1) {
     const t = index / (TOTAL_PETALS - 1);
     const ring = stageFor(index);
     const conf = RINGS[ring];
     const rand = mulberry32(101 + index * 7919);
-    const angle = index * 137.508 + 8 + (rand() - 0.5) * (4 + t * 12);
-    const baseOpen = 22 + 184 * Math.pow(t, 1.02) + (rand() - 0.5) * (10 + t * 34);
-    const baseClosed = 4 + 44 * Math.pow(t, 1.16) + (rand() - 0.5) * 3;
-    const len = (92 + 108 * Math.pow(t, 0.82)) * (0.94 + rand() * (0.12 + t * 0.1));
-    const half = (50 + 88 * Math.pow(t, 0.88)) * (0.94 + rand() * (0.12 + t * 0.08));
-    const closedSX = lerp(0.7, 0.5, t) + (rand() - 0.5) * 0.03;
-    const closedSY = lerp(0.72, 0.49, t) + (rand() - 0.5) * 0.03;
-    const twistClosed = -(14 + t * 38) + (rand() - 0.5) * 6;
-    const twistOpen = index < 13
-      ? 22 + index * 2.6 + (rand() - 0.5) * 5
-      : index < 26
-        ? 12 + (index - 13) * 1.1 + (rand() - 0.5) * 5
-        : 1 + (rand() - 0.5) * 7;
+    // The centre is deliberately crumpled: stronger jitter in angle, radius
+    // and lean near the middle keeps the inner petals from nesting into a
+    // neat rosette, which would read as a camellia.
+    const crumple = (1 - t) * (1 - t);
+    const angle = angles[index] + (rand() - 0.5) * (4 + t * 12 + 46 * crumple);
+    // Inner petals wrap almost tangentially around the bud; outer petals lie
+    // open along their radius. One direction for all, so the head spirals.
+    const tilt = lerp(128, 74, Math.pow(t, 0.9)) + (rand() - 0.5) * 40 * crumple;
+    // Every petal is attached at the receptacle, so the inner (short) petals
+    // sit on top and hide the long outer petals' bases — the way a rose is
+    // actually built. Only the outer part of each long petal is ever seen.
+    const baseOpen = 4 + 40 * Math.pow(t, 1.2) + (rand() - 0.5) * (4 + t * 14 + 40 * crumple);
+    const baseClosed = 2 + 16 * Math.pow(t, 1.2) + (rand() - 0.5) * 2;
+    // A cabbage rose is a dense folded centre wrapped in a handful of very
+    // large petals: the last tenth of the petals jump in size, so no ring of
+    // similar-sized petals ever forms.
+    const outer = smoothstep(0.82, 1, t);
+    const len = (34 + 74 * Math.pow(t, 0.85)) * (1 + 1.9 * outer) * (0.9 + rand() * (0.2 + t * 0.12));
+    const half = len * lerp(0.3, 0.54, Math.pow(t, 0.6)) * (0.9 + rand() * 0.2);
+    const bend = lerp(1.4, 0.55, t) * (0.8 + rand() * 0.4);
+    const curl = lerp(-0.5, 0.7, t) + (rand() - 0.5) * 0.2;
+    const closedSX = lerp(0.72, 0.52, t) + (rand() - 0.5) * 0.03;
+    const closedSY = lerp(0.74, 0.5, t) + (rand() - 0.5) * 0.03;
+    const twistClosed = -(16 + t * 34) + (rand() - 0.5) * 6;
+    const twistOpen = index < 14
+      ? 8 + index * 1.6 + (rand() - 0.5) * 5
+      : index < 30
+        ? 4 + (rand() - 0.5) * 5
+        : (rand() - 0.5) * 6;
     const duration = 570 + t * 250 + Math.round(rand() * 100);
-    const d = petalOutline(len, half, rand, ring);
-    const v = veinPath(len, half, rand, ring);
+    const d = petalOutline(len, half, rand, t, curl, bend);
+    const v = veinPath(len, half, rand);
     const c = creasePath(len, half, rand);
-    const color = conf.palette[index % conf.palette.length];
+    // A warm/cool shift per petal keeps the head from looking machined.
+    const baseColor = conf.palette[index % conf.palette.length];
+    const color = shadeHex(baseColor, (rand() - 0.5) * 0.22);
     const shapeId = `petalShape${index}`;
-    const shadowX = (1.1 + rand() * 1.9).toFixed(2);
-    const shadowY = (1.6 + rand() * 2.6).toFixed(2);
-    const shadowOpacity = (0.06 + rand() * 0.07).toFixed(3);
+    const shadowX = (rand() - 0.5) * 2.6;
+    const shadowY = -(2.6 + rand() * 4.2);      // the petal's rolled-over underside
+    const shadowOpacity = (0.18 + rand() * 0.2).toFixed(3);
 
     const shape = document.createElementNS(SVG_NS, "path");
     shape.setAttribute("id", shapeId);
@@ -176,16 +253,18 @@
     el.setAttribute("data-order", String(index));
     el.setAttribute("data-petal", "");
     el.innerHTML = `
-      <g class="petal__slide" transform="translate(0 ${(-baseClosed).toFixed(2)})">
+      <g class="petal__slide" transform="translate(0 ${(-baseClosed).toFixed(2)}) rotate(${tilt.toFixed(2)})">
         <g class="petal__fold" transform="scale(${closedSX.toFixed(3)} ${closedSY.toFixed(3)}) rotate(${twistClosed.toFixed(2)})">
-          <use class="petal__shadow" href="#${shapeId}" transform="translate(${shadowX} ${shadowY})" fill="#250610" opacity="${shadowOpacity}"/>
+          <use class="petal__shadow" href="#${shapeId}" transform="translate(${shadowX} ${shadowY})" fill="#1c050c" opacity="${shadowOpacity}" filter="url(#petalSoft)"/>
           <use class="petal__blade" href="#${shapeId}" fill="${color}"/>
           <use class="petal__side" href="#${shapeId}" fill="url(#petalSide)"/>
           <use class="petal__sheen" href="#${shapeId}" fill="url(#petalSheen)"/>
+          <use class="petal__cup" href="#${shapeId}" fill="url(#petalCup)"/>
           <use class="petal__base" href="#${shapeId}" fill="url(#petalBase)"/>
-          <use class="petal__rim" href="#${shapeId}" fill="none" stroke="url(#petalRim)" stroke-width="${ring > 4 ? 1.05 : 0.75}" stroke-linejoin="round"/>
-          <path class="petal__vein" d="${v}" fill="none" stroke="${ring > 4 ? "rgba(50,12,24,.16)" : "rgba(255,240,228,.12)"}" stroke-width="1" stroke-linecap="round"/>
-          <path class="petal__crease" d="${c}" fill="none" stroke="rgba(48,12,22,.055)" stroke-width="1.1" stroke-linecap="round"/>
+          <use class="petal__curl" href="#${shapeId}" fill="url(#petalCurl)"/>
+          <use class="petal__rim" href="#${shapeId}" fill="none" stroke="url(#petalRim)" stroke-width="${ring > 4 ? 0.7 : 0.5}" stroke-linejoin="round"/>
+          <path class="petal__vein" d="${v}" fill="none" stroke="${ring > 4 ? "rgba(50,12,24,.1)" : "rgba(255,240,228,.09)"}" stroke-width="1" stroke-linecap="round"/>
+          <path class="petal__crease" d="${c}" fill="none" stroke="rgba(48,12,22,.035)" stroke-width="1.1" stroke-linecap="round"/>
         </g>
       </g>`;
     const orientation = document.createElementNS(SVG_NS, "g");
@@ -204,6 +283,7 @@
       closedSY,
       twistClosed,
       twistOpen,
+      tilt,
       opened: false,
       duration
     });
@@ -219,7 +299,7 @@
     const sx = record.closedSX + (1 - record.closedSX) * progress;
     const sy = record.closedSY + (1 - record.closedSY) * progress;
     const rotation = record.twistClosed + (record.twistOpen - record.twistClosed) * progress;
-    record.slide.setAttribute("transform", `translate(0 ${(-r).toFixed(2)})`);
+    record.slide.setAttribute("transform", `translate(0 ${(-r).toFixed(2)}) rotate(${record.tilt.toFixed(2)})`);
     record.fold.setAttribute("transform", `scale(${sx.toFixed(4)} ${sy.toFixed(4)}) rotate(${rotation.toFixed(2)})`);
   }
 

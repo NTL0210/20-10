@@ -64,31 +64,46 @@
                   <stop offset=".88" stop-color="#2a0813" stop-opacity=".05"/>
                   <stop offset="1" stop-color="#2a0813" stop-opacity=".17"/>
                 </linearGradient>
-                <radialGradient id="petalBase" cx=".5" cy="1" r=".82">
-                  <stop offset="0" stop-color="#24060f" stop-opacity=".34"/>
-                  <stop offset=".5" stop-color="#24060f" stop-opacity=".09"/>
-                  <stop offset="1" stop-color="#24060f" stop-opacity="0"/>
+                <radialGradient id="petalBase" cx=".5" cy="1" r=".95">
+                  <stop offset="0" stop-color="#1b040b" stop-opacity=".52"/>
+                  <stop offset=".45" stop-color="#1b040b" stop-opacity=".19"/>
+                  <stop offset="1" stop-color="#1b040b" stop-opacity="0"/>
                 </radialGradient>
                 <linearGradient id="petalRim" x1="0" y1="1" x2="0" y2="0">
-                  <stop offset="0" stop-color="#ffe1d8" stop-opacity="0"/>
-                  <stop offset=".52" stop-color="#ffe1d8" stop-opacity=".03"/>
-                  <stop offset="1" stop-color="#fff0e6" stop-opacity=".13"/>
+                  <stop offset="0" stop-color="#ffe7dc" stop-opacity="0"/>
+                  <stop offset=".62" stop-color="#ffe7dc" stop-opacity=".05"/>
+                  <stop offset=".92" stop-color="#fff2e8" stop-opacity=".3"/>
+                  <stop offset="1" stop-color="#fff8f0" stop-opacity=".42"/>
+                </linearGradient>
+                <radialGradient id="petalCup" cx=".46" cy=".4" r=".7">
+                  <stop offset="0" stop-color="#fff3e6" stop-opacity=".2"/>
+                  <stop offset=".52" stop-color="#fff1e2" stop-opacity=".04"/>
+                  <stop offset="1" stop-color="#2a0812" stop-opacity=".2"/>
+                </radialGradient>
+                <linearGradient id="petalCurl" x1="0" y1="1" x2="0" y2="0">
+                  <stop offset=".4" stop-color="#340b17" stop-opacity="0"/>
+                  <stop offset=".66" stop-color="#340b17" stop-opacity=".2"/>
+                  <stop offset=".82" stop-color="#2a0812" stop-opacity=".07"/>
+                  <stop offset=".9" stop-color="#fff3e8" stop-opacity=".32"/>
+                  <stop offset=".965" stop-color="#f6e2d2" stop-opacity=".16"/>
+                  <stop offset="1" stop-color="#2a0812" stop-opacity=".14"/>
                 </linearGradient>
                 <radialGradient id="flowerCore" cx=".5" cy=".5" r=".5">
-                  <stop offset="0" stop-color="#2a0812" stop-opacity=".4"/>
-                  <stop offset=".58" stop-color="#2a0812" stop-opacity=".13"/>
+                  <stop offset="0" stop-color="#2a0812" stop-opacity=".24"/>
+                  <stop offset=".62" stop-color="#2a0812" stop-opacity=".09"/>
                   <stop offset="1" stop-color="#2a0812" stop-opacity="0"/>
                 </radialGradient>
-                <radialGradient id="flowerShade" cx=".5" cy=".5" r=".5">
+                <linearGradient id="flowerShade" x1=".16" y1=".04" x2=".84" y2="1">
                   <stop offset="0" stop-color="#2a0812" stop-opacity="0"/>
-                  <stop offset=".62" stop-color="#2a0812" stop-opacity=".06"/>
-                  <stop offset="1" stop-color="#2a0812" stop-opacity=".28"/>
-                </radialGradient>
-                <radialGradient id="flowerLight" cx=".5" cy=".5" r=".5">
-                  <stop offset="0" stop-color="#fff6ea" stop-opacity=".46"/>
-                  <stop offset=".46" stop-color="#ffe9cf" stop-opacity=".15"/>
+                  <stop offset=".5" stop-color="#2a0812" stop-opacity=".1"/>
+                  <stop offset=".82" stop-color="#2a0812" stop-opacity=".26"/>
+                  <stop offset="1" stop-color="#2a0812" stop-opacity=".4"/>
+                </linearGradient>
+                <linearGradient id="flowerLight" x1=".08" y1="0" x2=".92" y2="1">
+                  <stop offset="0" stop-color="#fff8ec" stop-opacity=".5"/>
+                  <stop offset=".42" stop-color="#ffe9cf" stop-opacity=".13"/>
                   <stop offset="1" stop-color="#ffe9cf" stop-opacity="0"/>
-                </radialGradient>
+                </linearGradient>
                 <radialGradient id="heartGrad" cx=".5" cy=".5" r=".5">
                   <stop offset="0" stop-color="#3a1120"/>
                   <stop offset=".7" stop-color="#4f1726"/>
@@ -104,6 +119,9 @@
                   <stop offset=".55" stop-color="#ffe9cf" stop-opacity=".22"/>
                   <stop offset="1" stop-color="#ffe9cf" stop-opacity="0"/>
                 </radialGradient>
+                <filter id="petalSoft" x="-30%" y="-30%" width="160%" height="160%">
+                  <feGaussianBlur stdDeviation="3.2"/>
+                </filter>
               </defs>
 
               <g class="stem" aria-hidden="true">
@@ -145,11 +163,11 @@
 
               <g class="rose__flower" id="flower" transform="translate(500 400)">
                 <ellipse class="rose__ground" cx="0" cy="30" rx="365" ry="350" fill="url(#groundGlow)"/>
-                <circle class="rose__heart" cx="0" cy="0" r="38" fill="url(#heartGrad)"/>
+                <circle class="rose__heart" cx="0" cy="0" r="24" fill="url(#heartGrad)"/>
                 <circle class="rose__hit" data-rose-hit cx="0" cy="0" r="402" fill="transparent" pointer-events="all"/>
                 <g id="petals" class="petals"></g>
                 <g class="rose__lighting" aria-hidden="true" pointer-events="none">
-                  <ellipse class="rose__core" cx="0" cy="-10" rx="148" ry="146" fill="url(#flowerCore)"/>
+                  <ellipse class="rose__core" cx="0" cy="-6" rx="118" ry="116" fill="url(#flowerCore)"/>
                   <ellipse class="rose__shade" cx="26" cy="34" rx="402" ry="394" fill="url(#flowerShade)"/>
                   <ellipse class="rose__light" cx="-44" cy="-74" rx="376" ry="356" fill="url(#flowerLight)"/>
                 </g>
