@@ -786,6 +786,7 @@
     userInitiated: false,
     starting: false,
     watchdog: 0,
+    bufferChecks: 0,
     attemptToken: 0
   };
 
@@ -937,6 +938,15 @@
     }
   }
 
+  function playerState() {
+    if (!music.player || typeof music.player.getPlayerState !== "function") return YT_UNSTARTED;
+    try {
+      return music.player.getPlayerState();
+    } catch (error) {
+      return YT_UNSTARTED;
+    }
+  }
+
   function safeUnmute() {
     if (!music.player || typeof music.player.unMute !== "function") return;
     try {
@@ -962,6 +972,14 @@
     }
   }
 
+  // Only silence a player that is demonstrably making sound (or trying to,
+  // in a muted playing state). An unstarted or buffering player must be left
+  // alone: pausing it would abort a slow but legitimate start.
+  function pauseAudiblePlayback() {
+    if (!music.player) return;
+    if (playerMuted() || playerState() === YT_PLAYING) safePause();
+  }
+
   function armPlaybackWatchdog(userInitiated) {
     clearPlaybackWatchdog();
     const token = ++music.attemptToken;
@@ -969,6 +987,21 @@
       music.watchdog = 0;
       if (token !== music.attemptToken) return;
       if (music.playing && !playerMuted()) return;
+      const currentState = playerState();
+      if (currentState === YT_PLAYING && !playerMuted()) {
+        // The state event may have raced the watchdog. Treat the real player
+        // state as the source of truth rather than reporting a false block.
+        onPlayerStateChange({ data: YT_PLAYING });
+        return;
+      }
+      // Buffering is progress, not an autoplay refusal. Allow a couple of
+      // extra watchdog windows before treating it as a failure.
+      if (currentState === YT_BUFFERING && music.bufferChecks < 2) {
+        music.bufferChecks += 1;
+        setMusicStatus("Chargement de la musique…");
+        armPlaybackWatchdog(userInitiated);
+        return;
+      }
       if (userInitiated) {
         markPlaybackFailure("La musique n'a pas pu démarrer. Activez-la à nouveau ou ouvrez la vidéo sur YouTube.");
       } else {
@@ -985,7 +1018,7 @@
     music.failed = false;
     clearPlaybackWatchdog();
     stopProgressPolling();
-    safePause();
+    pauseAudiblePlayback();
     setMusicStatus("La lecture automatique est bloquée. Activez la musique.");
     reflectMusic();
     setCueBusy(false);
@@ -1000,7 +1033,7 @@
     music.failed = true;
     clearPlaybackWatchdog();
     stopProgressPolling();
-    safePause();
+    pauseAudiblePlayback();
     setMusicStatus(message);
     reflectMusic();
     setCueBusy(false);
@@ -1062,6 +1095,7 @@
       return;
     }
     music.attempts += 1;
+    music.bufferChecks = 0;
     setMusicStatus("Chargement de la musique…");
     reflectMusic();
     armPlaybackWatchdog(userInitiated);
